@@ -25,7 +25,10 @@ permBtn.addEventListener('click', async () => {
 // Inject the preload script dynamically so the webview can communicate with main process
 // The preload script must be injected before webview starts running scripts
 const path = require('path');
-const preloadUrl = 'file://' + path.join(__dirname, 'preload.js').replace(/\\/g, '/');
+const preloadPath = path.join(__dirname, 'preload.js');
+let preloadUrl = 'file:///' + preloadPath.replace(/\\/g, '/');
+// Handle edge case where drive letter doesn't have a leading slash (like file:///C:/...)
+if (preloadUrl.startsWith('file:////')) preloadUrl = preloadUrl.replace('file:////', 'file:///');
 webview.setAttribute('preload', preloadUrl);
 
 // Navigation controls
