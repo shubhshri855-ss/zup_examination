@@ -32,8 +32,8 @@ export default function SeatMap3D({ onClose, targetRow, targetCol }: SeatMap3DPr
     camera.position.set(0, 150, 200);
     
     // Target position for camera zoom animation
-    let targetCameraPos = new THREE.Vector3(0, 150, 200);
-    let targetLookAt = new THREE.Vector3(0, 0, 0);
+    const targetCameraPos = new THREE.Vector3(0, 150, 200);
+    const targetLookAt = new THREE.Vector3(0, 0, 0);
     let isAnimating = false;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -119,7 +119,7 @@ export default function SeatMap3D({ onClose, targetRow, targetCol }: SeatMap3DPr
     // Store meshes for raycasting interactions
     const interactableObjects: THREE.Mesh[] = [];
     
-    let targetSeatPosition = new THREE.Vector3();
+    const targetSeatPosition = new THREE.Vector3();
 
     for(let r=0; r<rows; r++) {
       for(let c=0; c<cols; c++) {
@@ -308,20 +308,20 @@ export default function SeatMap3D({ onClose, targetRow, targetCol }: SeatMap3DPr
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-6xl h-[85vh] overflow-hidden relative shadow-2xl shadow-primary-500/20 flex flex-col ring-1 ring-white/10">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-6xl h-[85vh] overflow-hidden relative shadow-xl flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/80 z-10 backdrop-blur-sm">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-white/80 dark:bg-slate-900/80 z-10 backdrop-blur-md">
           <div>
-            <h2 className="text-xl font-bold text-white flex items-center">
-              <span className="w-3 h-3 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center tracking-tight">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 mr-2.5 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
               HDRI Campus & Classroom View
             </h2>
-            <p className="text-primary-400 text-sm mt-1">Block A - Hall 3 | Target: Row {targetRow}, Seat {targetCol}</p>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium">Block A - Hall 3 | Target: Row {targetRow}, Seat {targetCol}</p>
           </div>
           <button 
             onClick={onClose}
-            className="px-6 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors border border-red-500/20 font-medium"
+            className="px-5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md transition-colors border border-slate-200 dark:border-slate-700 font-medium text-sm"
           >
             Close Map
           </button>
@@ -329,22 +329,22 @@ export default function SeatMap3D({ onClose, targetRow, targetCol }: SeatMap3DPr
         
         {/* Loading Overlay */}
         {loadingMsg && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 z-20 backdrop-blur-sm">
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 z-20 backdrop-blur-sm">
             <div className="text-center">
-              <div className="w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-white font-medium">{loadingMsg}</p>
+              <div className="w-10 h-10 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-slate-900 dark:text-white font-semibold">{loadingMsg}</p>
             </div>
           </div>
         )}
 
         {/* 3D Container */}
-        <div ref={mountRef} className="flex-grow w-full relative cursor-crosshair bg-[#0a0f18]">
-           <div className="absolute bottom-6 left-6 text-white/50 text-sm pointer-events-none bg-black/50 p-4 rounded-xl border border-white/10 backdrop-blur-md">
-              <p className="font-bold text-white mb-2">Map Controls</p>
-              <ul className="space-y-1.5 text-slate-300">
-                <li><span className="text-primary-400 font-semibold">Left Drag:</span> Zoom In/Out (Move mouse up/down)</li>
-                <li><span className="text-primary-400 font-semibold">Right Drag:</span> Rotate View</li>
-                <li><span className="text-primary-400 font-semibold">Scroll:</span> Zoom in/out of the Campus</li>
+        <div ref={mountRef} className="flex-grow w-full relative cursor-crosshair bg-[#0f172a]">
+           <div className="absolute bottom-6 left-6 text-sm pointer-events-none bg-slate-900/80 p-5 rounded-xl border border-slate-700/50 backdrop-blur-md shadow-lg">
+              <p className="font-bold text-white mb-3 uppercase tracking-wider text-xs">Map Controls</p>
+              <ul className="space-y-2 text-slate-300">
+                <li className="flex items-center"><span className="w-1.5 h-1.5 rounded-full bg-primary-500 mr-2"></span> <span className="text-primary-400 font-semibold mr-1">Left Drag:</span> Zoom In/Out</li>
+                <li className="flex items-center"><span className="w-1.5 h-1.5 rounded-full bg-primary-500 mr-2"></span> <span className="text-primary-400 font-semibold mr-1">Right Drag:</span> Rotate View</li>
+                <li className="flex items-center"><span className="w-1.5 h-1.5 rounded-full bg-primary-500 mr-2"></span> <span className="text-primary-400 font-semibold mr-1">Scroll:</span> Zoom in/out of the Campus</li>
               </ul>
            </div>
         </div>

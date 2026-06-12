@@ -16,12 +16,9 @@ const io = new Server(server, {
 });
 
 // In-memory mock database
-let students = [
-  { id: 1, name: 'John Doe', roll: 'CS-442', status: 'verified', seat: 'A-12', match: 98 },
-  { id: 2, name: 'Jane Smith', roll: 'CS-443', status: 'pending', seat: 'A-13', match: null },
-];
+let students = [];
 
-let nextId = 3;
+let nextId = 1;
 
 // REST API Endpoints
 app.get('/api/students', (req, res) => {
@@ -68,6 +65,40 @@ app.put('/api/students/:id/status', (req, res) => {
   res.json(student);
 });
 
+app.put('/api/students/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const studentIndex = students.findIndex(s => s.id === id);
+  if (studentIndex === -1) {
+    return res.status(404).json({ error: 'Student not found' });
+  }
+
+  students[studentIndex] = { ...students[studentIndex], ...req.body };
+  
+  io.emit('student_updated', students[studentIndex]);
+  res.json(students[studentIndex]);
+});
+
+app.post('/api/cheat', (req, res) => {
+  const { name, message } = req.body;
+  
+  // Find roll number assigned by invigilator based on the name (case-insensitive)
+  const student = students.find(s => s.name.toLowerCase() === (name || '').toLowerCase());
+  const roll = student ? student.roll : 'Unassigned';
+
+  console.log(`Cheating attempt by ${name || 'Unknown'} (${roll}): ${message}`);
+  
+  const alertData = {
+    id: Date.now(),
+    roll: roll,
+    name: name || 'Unknown Student',
+    message: message || 'Cheating detected',
+    timestamp: new Date().toISOString()
+  };
+  
+  io.emit('cheating_attempt', alertData);
+  res.json({ success: true });
+});
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('A client connected:', socket.id);
@@ -76,7 +107,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = 3000;
+const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`SAMADHAN X Backend Server running on port ${PORT}`);
 });

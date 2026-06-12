@@ -1,9 +1,19 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, MapPin, Clock, Bot, UserCheck, FileText, AlertTriangle, Lock } from 'lucide-react';
+import { Upload, MapPin, Clock, Bot, UserCheck, FileText, AlertTriangle, Lock, Smartphone, X, LogOut } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 import SeatMap3D from '../components/SeatMap3D';
 import ProctoringSetup from '../components/ProctoringSetup';
 import { FaceLandmarker, ObjectDetector, FilesetResolver } from "@mediapipe/tasks-vision";
+
+declare global {
+  interface Window {
+    electronAPI?: {
+      startExam: () => void;
+      endExam: () => void;
+    };
+  }
+}
 
 export default function StudentDashboard() {
   const [ocrStatus, setOcrStatus] = useState<'idle' | 'processing' | 'done'>('idle');
@@ -26,6 +36,12 @@ export default function StudentDashboard() {
   const [examTerminated, setExamTerminated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [show360Toast, setShow360Toast] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const prevQuestion = useRef(0);
+
+  const studentName = localStorage.getItem('auth_name') || 'Student';
+  const studentEmail = localStorage.getItem('auth_email') || 'student@example.com';
 
   const [warnings, setWarnings] = useState(0);
   const [proctorMessage, setProctorMessage] = useState("Initializing Proctoring...");
@@ -48,7 +64,7 @@ export default function StudentDashboard() {
           },
           outputFaceBlendshapes: true,
           runningMode: "VIDEO",
-          numFaces: 1
+          numFaces: 5
         });
         
         objectDetectorRef.current = await ObjectDetector.createFromOptions(filesetResolver, {
@@ -86,6 +102,20 @@ export default function StudentDashboard() {
     setExamTerminated(true);
     if (requestRef.current) cancelAnimationFrame(requestRef.current);
     
+    // Notify invigilator via backend API
+    const email = localStorage.getItem('auth_email') || '';
+    const name = email ? email.split('@')[0] : 'Unknown Student';
+    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `${window.location.protocol}//${window.location.hostname}:5000`);
+    
+    fetch(`${BACKEND_URL}/api/cheat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name,
+        message: `Exam Terminated: ${reason}`
+      })
+    }).catch(err => console.error('Failed to report termination:', err));
+
     setTimeout(() => {
       try { window.close(); } catch(e) { console.error(e); }
       document.body.innerHTML = `
@@ -105,6 +135,21 @@ export default function StudentDashboard() {
     setProctorMessage("Warning: Please look at the screen!");
     setWarnings(prev => {
       const newWarnings = prev + 1;
+      
+      // Notify invigilator via backend API
+      const email = localStorage.getItem('auth_email') || '';
+      const name = email ? email.split('@')[0] : 'Unknown Student';
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `${window.location.protocol}//${window.location.hostname}:5000`);
+      
+      fetch(`${BACKEND_URL}/api/cheat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name,
+          message: newWarnings >= 2 ? "Exam terminated by AI: User caught looking away multiple times." : "AI Warning: User looking away from screen."
+        })
+      }).catch(err => console.error('Failed to report cheating:', err));
+
       if (newWarnings === 1) {
         alert("WARNING: Please look at the screen and ensure your face is visible. Next violation will terminate your exam.");
         violationCooldown.current = true;
@@ -115,6 +160,17 @@ export default function StudentDashboard() {
       return newWarnings;
     });
   }, [terminateExam]);
+
+  useEffect(() => {
+    if (examStarted && currentQuestion !== prevQuestion.current) {
+      if (currentQuestion > 0 && currentQuestion % 2 === 0) {
+        // eslint-disable-next-line
+        setShow360Toast(true);
+        setTimeout(() => setShow360Toast(false), 15000);
+      }
+      prevQuestion.current = currentQuestion;
+    }
+  }, [currentQuestion, examStarted]);
 
   useEffect(() => {
     let reqId: number;
@@ -146,6 +202,11 @@ export default function StudentDashboard() {
         if (isUnlocked && landmarkerRef.current) {
           const results = landmarkerRef.current.detectForVideo(videoRef.current, performance.now());
           
+          if (results.faceLandmarks && results.faceLandmarks.length > 1) {
+            terminateExam("Multiple faces detected in the camera frame. Unauthorized assistance is strictly prohibited.");
+            return;
+          }
+
           if (results.faceBlendshapes && results.faceBlendshapes.length > 0) {
             const blendshapes = results.faceBlendshapes[0].categories;
             const eyeLookOutLeft = blendshapes.find(b => b.categoryName === "eyeLookOutLeft")?.score || 0;
@@ -270,58 +331,106 @@ export default function StudentDashboard() {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <header className="mb-8 flex justify-between items-end flex-wrap gap-4">
+      <header className="mb-8 flex justify-between items-start flex-wrap gap-4 relative z-50">
         <div>
           <h1 className="text-3xl font-bold mb-2">{examStarted ? 'Examination in Progress' : 'Student Dashboard'}</h1>
           <p className="text-slate-600 dark:text-slate-400">
             {examStarted ? 'Advanced Algorithms - Do not exit full screen mode.' : 'Welcome back. Manage your examination journey here.'}
           </p>
         </div>
-        {!examStarted ? (
-          <button onClick={() => setShowProctoring(true)} className="btn-primary py-3 px-6 bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/30 font-semibold">
-            Start Examination Setup
-          </button>
-        ) : (
-          <div className="flex gap-4">
-            <div className="px-4 py-2 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 font-medium flex items-center animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>
-              Live Monitored
-            </div>
-            <button onClick={() => {
-               if (window.confirm("Are you sure you want to submit your exam?")) {
-                  // Submit logic here
-                  setExamTerminated(true);
-                  alert("Exam submitted successfully!");
-                  window.location.reload();
-               }
-            }} className="btn-primary py-2 px-6 bg-primary-600 hover:bg-primary-500 shadow-lg shadow-primary-500/30 font-semibold">
-              Submit Exam
+        
+        <div className="flex items-center gap-4 relative">
+          {!examStarted ? (
+            <button onClick={() => setShowProctoring(true)} className="btn-primary py-2.5 px-6 font-semibold shadow-sm">
+              Start Examination Setup
             </button>
+          ) : (
+            <div className="flex gap-4">
+              <div className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/20 dark:border-red-800/30 dark:text-red-400 rounded-lg font-medium flex items-center shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-red-500 mr-2 animate-pulse"></span>
+                Live Monitored
+              </div>
+              <button onClick={() => {
+                 if (window.confirm("Are you sure you want to submit your exam?")) {
+                    setExamTerminated(true);
+                    if (window.electronAPI) {
+                       window.electronAPI.endExam();
+                    }
+                    alert("Exam submitted successfully!");
+                    window.location.reload();
+                 }
+              }} className="btn-primary py-2 px-6 font-semibold shadow-sm">
+                Submit Exam
+              </button>
+            </div>
+          )}
+
+          {/* Profile Button */}
+          <div className="relative ml-2">
+            <button 
+              onClick={() => setShowProfile(!showProfile)}
+              className="flex items-center space-x-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1.5 rounded-full hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 flex items-center justify-center font-bold text-lg">
+                {studentName.charAt(0).toUpperCase()}
+              </div>
+            </button>
+            
+            <AnimatePresence>
+              {showProfile && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-14 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden"
+                >
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center space-x-3">
+                    <div className="w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 flex items-center justify-center font-bold text-xl flex-shrink-0">
+                      {studentName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="overflow-hidden">
+                      <h3 className="font-bold text-slate-900 dark:text-white truncate" title={studentName}>{studentName}</h3>
+                      <p className="text-xs text-slate-500 truncate" title={studentEmail}>{studentEmail}</p>
+                    </div>
+                  </div>
+                  <div className="p-2">
+                    <button onClick={() => {
+                      localStorage.clear();
+                      window.location.href = '/';
+                    }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-md transition-colors flex items-center font-medium">
+                      <LogOut size={16} className="mr-2" />
+                      Sign Out
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-        )}
+        </div>
       </header>
 
       {examStarted ? (
         <div className="grid lg:grid-cols-4 gap-8">
           {/* Exam Questions Section */}
           <div className="lg:col-span-3 space-y-6">
-            <div className="glass-card p-8 min-h-[60vh] flex flex-col relative overflow-hidden">
-               <div className="absolute top-0 left-0 w-full h-1 bg-slate-200 dark:bg-slate-700">
-                  <div className="h-full bg-primary-500 transition-all duration-300" style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}></div>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl p-8 min-h-[60vh] flex flex-col relative overflow-hidden">
+               <div className="absolute top-0 left-0 w-full h-1 bg-slate-100 dark:bg-slate-800">
+                  <div className="h-full bg-primary-600 transition-all duration-300" style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}></div>
                </div>
                
-               <div className="flex justify-between items-center mb-8 mt-4 text-sm font-medium text-slate-500">
+               <div className="flex justify-between items-center mb-8 mt-4 text-sm font-medium text-slate-500 dark:text-slate-400">
                   <span>Question {currentQuestion + 1} of {questions.length}</span>
-                  <span className="bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">+4 Marks | -1 Negative</span>
+                  <span className="bg-slate-50 dark:bg-slate-800 px-3 py-1 rounded-md border border-slate-200 dark:border-slate-700">+4 Marks | -1 Negative</span>
                </div>
                
-               <h3 className="text-2xl font-semibold mb-8 text-slate-800 dark:text-slate-100 leading-relaxed">
+               <h3 className="text-2xl font-semibold mb-8 text-slate-900 dark:text-white leading-relaxed">
                  {questions[currentQuestion].id}. {questions[currentQuestion].text}
                </h3>
                
                <div className={`space-y-4 mb-auto relative ${!materialsVerified ? 'opacity-50 pointer-events-none select-none' : ''}`}>
                  {!materialsVerified && (
-                   <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/40 dark:bg-slate-900/40 backdrop-blur-[2px] rounded-xl border border-slate-200 dark:border-slate-700">
+                   <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-700">
                      <Lock size={32} className="text-slate-500 mb-2" />
                      <p className="font-semibold text-slate-700 dark:text-slate-200">Exam Locked</p>
                      <p className="text-sm text-slate-500">Please show your pen & copy to the camera to unlock</p>
@@ -388,17 +497,15 @@ export default function StudentDashboard() {
           {/* Right Side Panel */}
           <div className="lg:col-span-1 space-y-6">
             {/* Live Video Feed */}
-            <div className="glass-card p-4 flex flex-col items-center border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.1)] relative overflow-hidden">
+            <div className="bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/50 shadow-sm rounded-xl p-4 flex flex-col items-center relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
-                <h3 className="text-md font-semibold mb-3 w-full text-left flex items-center text-slate-800 dark:text-slate-200">
-                  <UserCheck size={18} className="mr-2 text-primary-500" />
+                <h3 className="text-md font-semibold mb-3 w-full text-left flex items-center text-slate-900 dark:text-white">
+                  <UserCheck size={18} className="mr-2 text-red-500" />
                   Live Proctoring
                 </h3>
-                <div className="w-full aspect-[4/3] bg-black rounded-lg overflow-hidden relative border-2 border-slate-700 shadow-inner">
+                <div className="w-full aspect-[4/3] bg-slate-950 rounded-lg overflow-hidden relative border border-slate-200 dark:border-slate-800">
                   <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover transform -scale-x-100" />
-                  {/* Face detection overlay dummy */}
-                  <div className="absolute inset-0 border-2 border-emerald-500/50 m-8 rounded-lg animate-pulse pointer-events-none"></div>
-                  <div className={`absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-[10px] text-white flex items-center ${proctorMessage !== 'Face Verified' ? 'border border-amber-500 text-amber-400' : ''}`}>
+                  <div className={`absolute bottom-2 left-2 bg-slate-900/80 backdrop-blur-sm px-2.5 py-1 rounded-md text-[10px] font-medium text-white flex items-center border border-slate-700/50`}>
                     {proctorMessage === 'Face Verified' ? (
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
                     ) : proctorMessage.includes('unlock') ? (
@@ -421,33 +528,33 @@ export default function StudentDashboard() {
             </div>
 
             {/* Timer */}
-            <div className="glass-card p-6 flex flex-col items-center">
-                <div className="flex items-center text-slate-500 mb-2">
-                  <Clock size={18} className="mr-2" />
-                  <h3 className="font-semibold text-sm uppercase tracking-wider">Time Remaining</h3>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl p-6 flex flex-col items-center">
+                <div className="flex items-center text-slate-500 dark:text-slate-400 mb-2">
+                  <Clock size={16} className="mr-2" />
+                  <h3 className="font-semibold text-xs uppercase tracking-wider">Time Remaining</h3>
                 </div>
-                <div className="text-4xl font-mono font-bold text-slate-800 dark:text-white">
-                  <span className="text-primary-500">02</span>:59:59
+                <div className="text-4xl font-mono font-bold text-slate-900 dark:text-white">
+                  <span className="text-primary-600 dark:text-primary-400">02</span>:59:59
                 </div>
             </div>
 
             {/* Question Navigator */}
-            <div className="glass-card p-5">
-              <h3 className="text-sm font-semibold mb-4 text-slate-700 dark:text-slate-300">Question Palette</h3>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl p-5">
+              <h3 className="text-sm font-semibold mb-4 text-slate-900 dark:text-white">Question Palette</h3>
               <div className="grid grid-cols-4 gap-2">
                 {questions.map((_, idx) => {
-                  let statusClass = "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700";
+                  let statusClass = "bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700";
                   if (currentQuestion === idx) {
-                    statusClass = "bg-primary-500 text-white shadow-lg shadow-primary-500/30 scale-110 z-10";
+                    statusClass = "bg-primary-600 border-primary-600 text-white z-10 shadow-sm";
                   } else if (answers[idx]) {
-                    statusClass = "bg-emerald-500 text-white shadow-md shadow-emerald-500/20";
+                    statusClass = "bg-emerald-500 border-emerald-500 text-white shadow-sm";
                   }
                   
                   return (
                     <button
                       key={idx}
                       onClick={() => setCurrentQuestion(idx)}
-                      className={`w-full aspect-square rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-200 hover:scale-105 ${statusClass}`}
+                      className={`w-full aspect-square rounded-md flex items-center justify-center text-sm font-medium transition-colors ${statusClass}`}
                     >
                       {idx + 1}
                     </button>
@@ -468,15 +575,15 @@ export default function StudentDashboard() {
         <div className="lg:col-span-2 space-y-8">
           
           {/* Upload Section */}
-          <motion.div className="glass-card p-6" whileHover={{ scale: 1.01 }}>
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="bg-primary-100 dark:bg-primary-900/30 p-3 rounded-xl text-primary-600">
-                <Upload size={24} />
+          <motion.div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl p-6">
+            <div className="flex items-center space-x-3 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="bg-primary-50 dark:bg-primary-900/20 p-2.5 rounded-lg text-primary-600 dark:text-primary-400 border border-primary-100 dark:border-primary-800/30">
+                <Upload size={20} />
               </div>
-              <h2 className="text-xl font-semibold">Admit Card Upload</h2>
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Admit Card Upload</h2>
             </div>
             
-            <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center transition-colors hover:border-primary-500">
+            <div className="border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 rounded-xl p-8 text-center transition-colors hover:border-primary-500 dark:hover:border-primary-500 hover:bg-slate-50 dark:hover:bg-slate-800">
               <input 
                 type="file" 
                 id="admit-card" 
@@ -485,9 +592,9 @@ export default function StudentDashboard() {
                 onChange={handleUpload}
               />
               <label htmlFor="admit-card" className="cursor-pointer flex flex-col items-center">
-                <FileText size={48} className="text-slate-400 mb-4" />
-                <span className="text-lg font-medium mb-1">Click to upload or drag & drop</span>
-                <span className="text-sm text-slate-500">PDF, JPG, PNG up to 5MB</span>
+                <FileText size={40} className="text-slate-400 dark:text-slate-500 mb-4" />
+                <span className="text-base font-semibold text-slate-700 dark:text-slate-300 mb-1">Click to upload or drag & drop</span>
+                <span className="text-sm text-slate-500 dark:text-slate-400">PDF, JPG, PNG up to 5MB</span>
               </label>
             </div>
 
@@ -516,22 +623,21 @@ export default function StudentDashboard() {
           </motion.div>
 
           {/* Seat Finder */}
-          <motion.div className="glass-card p-6" whileHover={{ scale: 1.01 }}>
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-xl text-purple-600">
-                <MapPin size={24} />
+          <motion.div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl p-6">
+            <div className="flex items-center space-x-3 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="bg-indigo-50 dark:bg-indigo-900/20 p-2.5 rounded-lg text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/30">
+                <MapPin size={20} />
               </div>
-              <h2 className="text-xl font-semibold">Seat Navigation</h2>
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Seat Navigation</h2>
             </div>
             
-            <div className="bg-slate-100 dark:bg-slate-800 rounded-xl h-64 flex items-center justify-center border border-slate-200 dark:border-slate-700 overflow-hidden relative">
-              {/* Placeholder for Three.js integration */}
-              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-              <div className="text-center z-10">
-                <MapPin size={48} className="text-purple-500 mx-auto mb-4 animate-bounce" />
-                <h3 className="font-bold text-xl">Block A - Hall 3</h3>
-                <p className="text-slate-500">Row 4, Seat 12</p>
-                <button onClick={() => setShow3DMap(true)} className="mt-4 btn-primary text-sm">Open 3D Map</button>
+            <div className="bg-slate-50 dark:bg-slate-950 rounded-xl h-64 flex items-center justify-center border border-slate-200 dark:border-slate-800 overflow-hidden relative">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-100/50 via-slate-50 to-slate-50 dark:from-indigo-900/10 dark:via-slate-950 dark:to-slate-950"></div>
+              <div className="text-center z-10 p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+                <MapPin size={32} className="text-indigo-600 dark:text-indigo-400 mx-auto mb-3" />
+                <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-1">Block A - Hall 3</h3>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Row 4, Seat 12</p>
+                <button onClick={() => setShow3DMap(true)} className="mt-5 btn-secondary text-sm px-6 py-2">Open 3D Map</button>
               </div>
             </div>
           </motion.div>
@@ -540,26 +646,33 @@ export default function StudentDashboard() {
         {/* Sidebar */}
         <div className="space-y-8">
           {/* Smart Arrival */}
-          <div className="glass-card p-6 bg-gradient-to-br from-blue-500 to-indigo-600 text-white border-none">
-            <div className="flex items-center space-x-2 mb-4">
-              <Clock size={20} />
-              <h3 className="font-semibold">Smart Arrival</h3>
+          <div className="bg-primary-600 text-white rounded-xl shadow-sm p-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-10">
+              <Clock size={100} />
             </div>
-            <div className="text-3xl font-bold mb-2">08:45 AM</div>
-            <p className="text-blue-100 text-sm mb-4">Recommended arrival time based on current traffic and queue length.</p>
-            <div className="bg-white/20 p-3 rounded-lg text-sm flex justify-between items-center">
-              <span>Traffic: Light</span>
-              <span>Queue: 15 mins</span>
+            <div className="relative z-10">
+              <div className="flex items-center space-x-2 mb-4">
+                <Clock size={20} />
+                <h3 className="font-semibold text-primary-50">Smart Arrival</h3>
+              </div>
+              <div className="text-3xl font-bold mb-2 tracking-tight">08:45 AM</div>
+              <p className="text-primary-100 text-sm mb-6 leading-relaxed">Recommended arrival time based on current traffic and queue length.</p>
+              <div className="bg-primary-700/50 border border-primary-500 p-3 rounded-lg text-sm flex justify-between items-center font-medium">
+                <span>Traffic: Light</span>
+                <span>Queue: 15 mins</span>
+              </div>
             </div>
           </div>
 
           {/* AI Assistant */}
-          <div className="glass-card p-0 overflow-hidden flex flex-col h-[400px]">
-            <div className="bg-slate-100 dark:bg-slate-800 p-4 border-b border-slate-200 dark:border-slate-700 flex items-center space-x-3">
-              <Bot size={24} className="text-primary-500" />
-              <h3 className="font-semibold">AI Assistant</h3>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl overflow-hidden flex flex-col h-[400px]">
+            <div className="bg-slate-50 dark:bg-slate-900/50 p-4 border-b border-slate-200 dark:border-slate-800 flex items-center space-x-3">
+              <div className="bg-primary-100 dark:bg-primary-900/30 p-2 rounded-md">
+                <Bot size={20} className="text-primary-600 dark:text-primary-400" />
+              </div>
+              <h3 className="font-semibold text-slate-900 dark:text-white">AI Assistant</h3>
             </div>
-            <div className="flex-grow p-4 overflow-y-auto space-y-4 text-sm bg-slate-50 dark:bg-slate-900/50">
+            <div className="flex-grow p-4 overflow-y-auto space-y-4 text-sm bg-white dark:bg-slate-900">
               {messages.map((msg, idx) => (
                 <div key={idx} className={msg.role === 'bot' 
                   ? "bg-white dark:bg-slate-800 p-3 rounded-lg rounded-tl-none border border-slate-200 dark:border-slate-700 max-w-[80%]"
@@ -588,8 +701,42 @@ export default function StudentDashboard() {
       {showProctoring && <ProctoringSetup onComplete={(stream) => { 
         setMediaStream(stream);
         setShowProctoring(false); 
-        setExamStarted(true); 
+        setExamStarted(true);
+        if (window.electronAPI) {
+          window.electronAPI.startExam();
+        }
       }} />}
+
+      <AnimatePresence>
+        {show360Toast && (
+          <motion.div 
+            initial={{ opacity: 0, x: 50, y: 50 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            exit={{ opacity: 0, x: 50, y: 50, scale: 0.9 }}
+            className="fixed bottom-6 right-6 z-[400] bg-white dark:bg-slate-900 border-2 border-indigo-500 shadow-2xl rounded-2xl p-5 max-w-sm"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-3 mb-2">
+                <div className="bg-indigo-100 dark:bg-indigo-900/30 p-2 rounded-full text-indigo-600 dark:text-indigo-400">
+                  <Smartphone size={24} className="animate-pulse" />
+                </div>
+                <h3 className="font-bold text-slate-900 dark:text-white">Security Scan Required</h3>
+              </div>
+              <button onClick={() => setShow360Toast(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mt-2">
+              Please pick up your laptop or camera and perform a slow 360° scan of your room to verify your surroundings. Our AI is recording this.
+            </p>
+            <div className="mt-4 flex gap-3">
+              <button onClick={() => setShow360Toast(false)} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold text-sm transition-colors">
+                I am scanning now
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
