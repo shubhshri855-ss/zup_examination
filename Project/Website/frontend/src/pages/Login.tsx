@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
+import { toast } from 'react-hot-toast';
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
@@ -39,32 +40,39 @@ export default function Login() {
         const finalRole = loginType === 'student' ? 'student' : (email.includes('admin') ? 'admin' : 'invigilator');
 
         const userDocRef = doc(db, 'users', user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        
-        if (!userDocSnap.exists()) {
-           const inferredName = email.split('@')[0];
-           await setDoc(userDocRef, {
-             name: inferredName,
-             email: user.email,
-             role: finalRole,
-             createdAt: new Date().toISOString()
-           });
-           localStorage.setItem('auth_name', inferredName);
-        } else {
-           localStorage.setItem('auth_name', userDocSnap.data().name);
-        }
+        // Do not await getDoc and setDoc to give instant access
+        getDoc(userDocRef).then((userDocSnap) => {
+          if (!userDocSnap.exists()) {
+             const inferredName = email.split('@')[0];
+             setDoc(userDocRef, {
+               name: inferredName,
+               email: user.email,
+               role: finalRole,
+               createdAt: new Date().toISOString()
+             });
+             localStorage.setItem('auth_name', inferredName);
+          } else {
+             const data = userDocSnap.data();
+             if (data && data.name) {
+               localStorage.setItem('auth_name', data.name);
+             }
+          }
+        }).catch(console.error);
+        toast.success("Login successful!", { duration: 2000 });
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         const finalRole = loginType === 'student' ? 'student' : (email.includes('admin') ? 'admin' : 'invigilator');
         
-        await setDoc(doc(db, 'users', user.uid), {
+        // Do not await setDoc to give instant access
+        setDoc(doc(db, 'users', user.uid), {
           name: name,
           email: user.email,
           role: finalRole,
           createdAt: new Date().toISOString()
-        });
+        }).catch(console.error);
         localStorage.setItem('auth_name', name);
+        toast.success("Signup successful!", { duration: 2000 });
       }
       
       if (loginType === 'student') {
@@ -84,10 +92,12 @@ export default function Login() {
       console.error(err);
       if (err.code === 'auth/invalid-api-key') {
         setError('Firebase Error: Please add your actual Firebase Config in src/config/firebase.ts!');
-      } else if (err.code === 'auth/invalid-credential') {
-        setError('Invalid Email or Password.');
+      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found') {
+        toast.error('You have not signed up yet. Please sign up first!', { duration: 4000 });
+        setIsLogin(false); // Switch to signup
       } else if (err.code === 'auth/email-already-in-use') {
-        setError('This email is already registered. Please login.');
+        toast.error('This email is already registered. Please login.', { duration: 4000 });
+        setIsLogin(true); // Switch to login
       } else if (err.code === 'auth/weak-password') {
         setError('Password must be at least 6 characters.');
       } else {

@@ -7,6 +7,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { Toaster } from 'react-hot-toast';
 
 const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) => {
   const { role } = useAuth();
@@ -28,6 +29,7 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode,
 function App() {
   return (
     <ThemeProvider>
+      <Toaster position="top-center" reverseOrder={false} toastOptions={{ duration: 4000, style: { background: '#333', color: '#fff' } }} />
       <AuthProvider>
         <Router>
           <Layout>
