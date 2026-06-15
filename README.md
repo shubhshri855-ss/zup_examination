@@ -207,6 +207,11 @@ This produces an NSIS installer and a portable `.exe` in the `dist/` folder.
 | `VITE_BACKEND_URL` | URL of the Express backend |
 
 ---
+## Demo Ids
+Student Login
+| Mail :- shubh@gmail.com | Password :- 12345678 |
+Invigilator 
+| Mail :- harsh@gmail.com | Password :- 12345678 |
 
 ## API Reference
 
