@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Moon, Sun, Shield, User, Users, LogOut, LogIn } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import logo from '../assets/logo.jpg';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { theme, toggleTheme } = useTheme();
@@ -38,12 +39,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <nav className="sticky top-0 z-50 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-3">
-              <div className="bg-primary-600 p-2 rounded-lg text-white">
-                <Shield size={22} />
+            <Link to="/" className="flex items-center space-x-3 hover:opacity-95 transition-opacity">
+              <div className="overflow-hidden rounded-full h-10 w-10 border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white">
+                <img src={logo} alt="SAMADHAN X Logo" className="h-9 w-9 object-contain" />
               </div>
               <span className="font-bold text-xl tracking-tight text-slate-900 dark:text-white">SAMADHAN X</span>
-            </div>
+            </Link>
             
             <div className="hidden md:flex space-x-1 items-center">
               {navLinks.map((link) => (

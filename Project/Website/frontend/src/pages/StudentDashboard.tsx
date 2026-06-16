@@ -30,8 +30,18 @@ export default function StudentDashboard() {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [show3DMap, setShow3DMap] = useState(false);
-  const [showProctoring, setShowProctoring] = useState(false);
+  const [showProctoring, setShowProctoring] = useState(() => {
+    return sessionStorage.getItem('show_proctoring') === 'true';
+  });
   const [examStarted, setExamStarted] = useState(false);
+
+  useEffect(() => {
+    if (showProctoring) {
+      sessionStorage.setItem('show_proctoring', 'true');
+    } else {
+      sessionStorage.removeItem('show_proctoring');
+    }
+  }, [showProctoring]);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [examTerminated, setExamTerminated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -286,32 +296,82 @@ export default function StudentDashboard() {
   const generateAIResponse = (query: string) => {
     const lowerQuery = query.toLowerCase();
     
-    if (lowerQuery.includes('samadhan') || lowerQuery.includes('website') || lowerQuery.includes('platform')) {
-      return "SAMADHAN X is an AI-powered examination ecosystem. It provides secure onboarding, real-time monitoring, and smart features like face verification and seat navigation to make exams fair and seamless.";
-    }
-    if (lowerQuery.includes('calculator') || lowerQuery.includes('carry') || lowerQuery.includes('allow')) {
-      return "For the Advanced Algorithms exam, only non-programmable scientific calculators and blue/black ballpoint pens are allowed. Smartwatches and phones are strictly prohibited.";
-    }
-    if (lowerQuery.includes('admit card') || lowerQuery.includes('upload')) {
-      return "You can upload your admit card using the 'Admit Card Upload' section on this dashboard. Our system uses AI OCR to quickly verify your details.";
-    }
-    if (lowerQuery.includes('seat') || lowerQuery.includes('where')) {
-      return "Your seat for the upcoming exam is located in Block A, Hall 3, Row 4, Seat 12. You can use the Seat Navigation map to find it easily.";
-    }
-    if (lowerQuery.includes('education') || lowerQuery.includes('study') || lowerQuery.includes('prepare')) {
-      return "Continuous learning is key! For exams like Advanced Algorithms, focusing on dynamic programming and graph theories is highly recommended. Always practice previous year papers and take frequent short breaks.";
-    }
-    if (lowerQuery.includes('exam') || lowerQuery.includes('syllabus') || lowerQuery.includes('time')) {
-      return "Your upcoming exam 'Advanced Algorithms' is scheduled for 09:00 AM. Please arrive at least 15 minutes prior to the start time.";
-    }
-    if (lowerQuery.includes('hi') || lowerQuery.includes('hello') || lowerQuery.includes('hey')) {
-      return "Hello there! How can I assist you with your exam preparations or platform queries today?";
-    }
-    if (lowerQuery.includes('thank')) {
-      return "You're very welcome! Let me know if you need any other assistance. Good luck with your studies!";
+    // Check if it's a basic greeting or thanks
+    const isGreeting = lowerQuery.includes('hi') || lowerQuery.includes('hello') || lowerQuery.includes('hey');
+    const isThanks = lowerQuery.includes('thank');
+    
+    // Check for website/platform/exams keywords
+    const isWebsiteRelated = 
+      lowerQuery.includes('samadhan') || 
+      lowerQuery.includes('website') || 
+      lowerQuery.includes('platform') ||
+      lowerQuery.includes('system') ||
+      lowerQuery.includes('portal') ||
+      lowerQuery.includes('dashboard') ||
+      lowerQuery.includes('exam') || 
+      lowerQuery.includes('test') || 
+      lowerQuery.includes('algorithm') ||
+      lowerQuery.includes('syllabus') ||
+      lowerQuery.includes('time') ||
+      lowerQuery.includes('schedule') ||
+      lowerQuery.includes('date') ||
+      lowerQuery.includes('calculator') || 
+      lowerQuery.includes('carry') || 
+      lowerQuery.includes('allow') ||
+      lowerQuery.includes('rule') ||
+      lowerQuery.includes('device') ||
+      lowerQuery.includes('phone') ||
+      lowerQuery.includes('watch') ||
+      lowerQuery.includes('admit card') || 
+      lowerQuery.includes('upload') ||
+      lowerQuery.includes('ocr') ||
+      lowerQuery.includes('verify') ||
+      lowerQuery.includes('verification') ||
+      lowerQuery.includes('seat') || 
+      lowerQuery.includes('where') ||
+      lowerQuery.includes('map') ||
+      lowerQuery.includes('navigate') ||
+      lowerQuery.includes('navigation') ||
+      lowerQuery.includes('room') ||
+      lowerQuery.includes('hall') ||
+      lowerQuery.includes('block') ||
+      lowerQuery.includes('proctor') ||
+      lowerQuery.includes('warning') ||
+      lowerQuery.includes('cheat') ||
+      lowerQuery.includes('camera') ||
+      lowerQuery.includes('scan') ||
+      lowerQuery.includes('360');
+
+    if (!isWebsiteRelated && !isGreeting && !isThanks) {
+      return "I can't understand. I can only assist you with queries related to the SAMADHAN X platform, your exams, seat navigation, rules, or admit card verification.";
     }
 
-    return "That's an interesting question! As your Samadhan AI assistant, I specialize in the examination ecosystem, platform navigation, and educational guidelines. Can you please elaborate so I can help you better?";
+    if (lowerQuery.includes('samadhan') || lowerQuery.includes('website') || lowerQuery.includes('platform') || lowerQuery.includes('portal') || lowerQuery.includes('system') || lowerQuery.includes('dashboard')) {
+      return "SAMADHAN X is an AI-powered examination ecosystem. It provides secure onboarding, real-time monitoring, and smart features like face verification, 3D seat navigation, and automatic proctoring to make exams fair and seamless.";
+    }
+    if (lowerQuery.includes('calculator') || lowerQuery.includes('carry') || lowerQuery.includes('allow') || lowerQuery.includes('rule') || lowerQuery.includes('phone') || lowerQuery.includes('watch') || lowerQuery.includes('device')) {
+      return "For the Advanced Algorithms exam, only non-programmable scientific calculators and blue/black ballpoint pens are allowed. Smartwatches, mobile phones, bags, and unauthorized materials are strictly prohibited inside the hall.";
+    }
+    if (lowerQuery.includes('admit card') || lowerQuery.includes('upload') || lowerQuery.includes('ocr') || lowerQuery.includes('verify') || lowerQuery.includes('verification')) {
+      return "You can upload your admit card PDF/image in the 'Admit Card Upload' section of this student dashboard. The platform's OCR engine will automatically verify your credentials.";
+    }
+    if (lowerQuery.includes('seat') || lowerQuery.includes('where') || lowerQuery.includes('map') || lowerQuery.includes('navigate') || lowerQuery.includes('navigation') || lowerQuery.includes('room') || lowerQuery.includes('hall') || lowerQuery.includes('block')) {
+      return "Your seat is assigned at Block A, Hall 3, Row 4, Seat 12. Click the 'Open 3D Map' button in the Seat Navigation card to view your seat placement visually.";
+    }
+    if (lowerQuery.includes('exam') || lowerQuery.includes('test') || lowerQuery.includes('algorithm') || lowerQuery.includes('syllabus') || lowerQuery.includes('time') || lowerQuery.includes('schedule') || lowerQuery.includes('date')) {
+      return "Your upcoming exam 'Advanced Algorithms' is scheduled for today at 09:00 AM. The syllabus covers sorting algorithms, binary search trees, hash tables, and dynamic programming.";
+    }
+    if (lowerQuery.includes('proctor') || lowerQuery.includes('warning') || lowerQuery.includes('cheat') || lowerQuery.includes('camera') || lowerQuery.includes('scan') || lowerQuery.includes('360')) {
+      return "The platform features real-time AI Proctoring. You must keep your face visible to the camera, avoid looking away, and show your exam materials (pen & copy) to start. If you look away repeatedly, the exam will be terminated.";
+    }
+    if (isGreeting) {
+      return "Hello John! How can I assist you with your SAMADHAN X platform queries, seat details, or exam guidelines today?";
+    }
+    if (isThanks) {
+      return "You're welcome! Let me know if you have any other questions regarding your exam or the SAMADHAN X platform. Good luck!";
+    }
+
+    return "I can't understand. Please ask me about SAMADHAN X features, exam rules, timings, seat placement, or admit card uploads.";
   };
 
   const handleSendMessage = (e?: React.FormEvent) => {
@@ -698,14 +758,23 @@ export default function StudentDashboard() {
       </div>
       )}
       {show3DMap && <SeatMap3D targetRow={4} targetCol={12} onClose={() => setShow3DMap(false)} />}
-      {showProctoring && <ProctoringSetup onComplete={(stream) => { 
-        setMediaStream(stream);
-        setShowProctoring(false); 
-        setExamStarted(true);
-        if (window.electronAPI) {
-          window.electronAPI.startExam();
-        }
-      }} />}
+      {showProctoring && <ProctoringSetup 
+        onComplete={(stream) => { 
+          setMediaStream(stream);
+          setShowProctoring(false); 
+          setExamStarted(true);
+          sessionStorage.removeItem('show_proctoring');
+          sessionStorage.removeItem('proctoring_step');
+          if (window.electronAPI) {
+            window.electronAPI.startExam();
+          }
+        }} 
+        onClose={() => {
+          setShowProctoring(false);
+          sessionStorage.removeItem('show_proctoring');
+          sessionStorage.removeItem('proctoring_step');
+        }}
+      />}
 
       <AnimatePresence>
         {show360Toast && (

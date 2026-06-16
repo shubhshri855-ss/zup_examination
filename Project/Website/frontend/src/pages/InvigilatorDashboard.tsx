@@ -12,6 +12,7 @@ interface Student {
   seat: string;
   match: number | null;
   referenceDescriptor?: number[];
+  centerId?: number;
 }
 
 interface CheatingAlert {
@@ -22,9 +23,51 @@ interface CheatingAlert {
   timestamp: number;
 }
 
+const STATIC_CENTERS = [
+  { id: 2, name: 'Mumbai Central - Block B', location: 'Mumbai', expected: 80, present: 45, verified: 40 },
+  { id: 3, name: 'Delhi Tech Arena - Hall 1', location: 'New Delhi', expected: 90, present: 62, verified: 58 },
+  { id: 4, name: 'Bangalore Cyberspace - Lab 3', location: 'Bengaluru', expected: 70, present: 31, verified: 28 },
+  { id: 5, name: 'Chennai Network Hub', location: 'Chennai', expected: 80, present: 42, verified: 39 },
+  { id: 6, name: 'Kolkata Exam Space - Block A', location: 'Kolkata', expected: 100, present: 54, verified: 50 },
+];
+
+const generateMockStudentsForCenter = (centerId: number) => {
+  const center = STATIC_CENTERS.find(c => c.id === centerId);
+  if (!center) return [];
+  const list: Student[] = [];
+  const code = center.location.substring(0, 3).toUpperCase();
+  const nameList = [
+    'Amit Sharma', 'Priya Patel', 'Rajesh Kumar', 'Sneha Reddy', 'Vikram Singh',
+    'Ananya Iyer', 'Sanjay Gupta', 'Deepika Rao', 'Arjun Mehta', 'Kriti Joshi',
+    'Rahul Verma', 'Neha Nair', 'Aditya Mishra', 'Ritu Choudhary', 'Gaurav Sen',
+    'Pooja Das', 'Sandeep Gill', 'Shreya Bose', 'Rohan Dixit', 'Tanvi Kapoor',
+    'Abhishek Roy', 'Meera Krishnan', 'Jatin Solanki', 'Divya Saxena', 'Varun Joshi',
+    'Nisha Prasad', 'Karan Khanna', 'Anjali Malhotra', 'Pranav Shah', 'Simran Kaur',
+    'Manish Tiwari', 'Kavita Sharma', 'Rishabh Pant', 'Isha Ambani', 'Hardik Pandya',
+    'Shikhar Dhawan', 'Rohit Sharma', 'Virat Kohli', 'Jasprit Bumrah', 'Kunal Pandya',
+    'Yuzvendra Chahal', 'Ravindra Jadeja', 'Ajinkya Rahane', 'Cheteshwar Pujara', 'Ishant Sharma',
+    'Mohammed Shami', 'Umesh Yadav', 'Bhuvneshwar Kumar', 'Shreyas Iyer', 'KL Rahul',
+    'Sanju Samson', 'Ishan Kishan', 'Suryakumar Yadav', 'Deepak Chahar'
+  ];
+  for (let i = 1; i <= center.present; i++) {
+    const isVerified = i <= center.verified;
+    const name = nameList[(i - 1) % nameList.length];
+    list.push({
+      id: centerId * 1000 + i,
+      name,
+      roll: `CS-2026-${code}-${String(i).padStart(3, '0')}`,
+      seat: `${String.fromCharCode(65 + (i % 6))}-${10 + (i % 20)}`,
+      status: isVerified ? 'verified' : 'pending',
+      match: isVerified ? Math.floor(Math.random() * 15) + 85 : null
+    });
+  }
+  return list;
+};
+
 export default function InvigilatorDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [students, setStudents] = useState<Student[]>([]);
+  const [activeCenterId, setActiveCenterId] = useState<number>(1);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newStudent, setNewStudent] = useState({ name: '', roll: '', seat: '' });
   const [cheatingAlerts, setCheatingAlerts] = useState<CheatingAlert[]>([]);
@@ -32,9 +75,17 @@ export default function InvigilatorDashboard() {
   const [isAdding, setIsAdding] = useState(false);
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `${window.location.protocol}//${window.location.hostname}:5000`);
 
-
-
   useEffect(() => {
+    // Fetch active center first
+    fetch(`${BACKEND_URL}/api/active-center`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.activeCenterId) {
+          setActiveCenterId(data.activeCenterId);
+        }
+      })
+      .catch(err => console.error('Failed to fetch active center', err));
+
     fetch(`${BACKEND_URL}/api/students`)
       .then(res => res.json())
       .then(data => {
@@ -49,6 +100,10 @@ export default function InvigilatorDashboard() {
 
     const socket = io(BACKEND_URL);
     
+    socket.on('active_center_changed', (centerId: number) => {
+      setActiveCenterId(centerId);
+    });
+
     socket.on('student_added', (student: Student) => {
       setStudents(prev => [...prev, student]);
     });
@@ -61,6 +116,10 @@ export default function InvigilatorDashboard() {
       setCheatingAlerts(prev => [alert, ...prev].slice(0, 5)); // Keep latest 5 alerts
       // Automatically flag the student if they exist
       setStudents(prev => prev.map(s => s.roll === alert.roll ? { ...s, status: 'flagged' } : s));
+    });
+
+    socket.on('student_deleted', (deletedStudent: Student) => {
+      setStudents(prev => prev.filter(s => s.id !== deletedStudent.id));
     });
 
     return () => {
@@ -154,19 +213,47 @@ export default function InvigilatorDashboard() {
     }
   };
 
-  const filteredStudents = students.filter(s => s.roll.toLowerCase().includes(searchTerm.toLowerCase()) || s.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const activeStudents = React.useMemo(() => {
+    const backendStudentsForCenter = students.filter(s => (s.centerId || 1) === activeCenterId);
+    if (activeCenterId === 1) return backendStudentsForCenter;
+    const mockBase = generateMockStudentsForCenter(activeCenterId);
+    return [...mockBase, ...backendStudentsForCenter];
+  }, [activeCenterId, students]);
+
+  const filteredStudents = activeStudents.filter(s => 
+    s.roll.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    s.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
   
-  const presentCount = students.length;
-  const verifiedCount = students.filter(s => s.status === 'verified').length;
-  const flaggedCount = students.filter(s => s.status === 'flagged').length;
+  const getActiveCenterStats = () => {
+    if (activeCenterId === 1) {
+      const backendStudents = students.filter(s => (s.centerId || 1) === 1);
+      const present = backendStudents.length;
+      const verified = backendStudents.filter(s => s.status === 'verified').length;
+      const flagged = backendStudents.filter(s => s.status === 'flagged').length;
+      return { expected: 80, present, verified, flagged };
+    } else {
+      const center = STATIC_CENTERS.find(c => c.id === activeCenterId);
+      const backendStudents = students.filter(s => s.centerId === activeCenterId);
+      const expected = center?.expected || 0;
+      const present = (center?.present || 0) + backendStudents.length;
+      const verified = (center?.verified || 0) + backendStudents.filter(s => s.status === 'verified').length;
+      const flagged = backendStudents.filter(s => s.status === 'flagged').length;
+      return { expected, present, verified, flagged };
+    }
+  };
+
+  const { expected: activeExpected, present: presentCount, verified: verifiedCount, flagged: flaggedCount } = getActiveCenterStats();
 
   return (
     <div className="space-y-8 animate-fade-in relative">
       <header className="flex justify-between items-end mb-8 border-b border-slate-200 dark:border-slate-800 pb-6 flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">Invigilator Panel</h1>
-          <p className="text-slate-600 dark:text-slate-400 flex items-center">
-            <span className="font-medium mr-2">Hall 3</span> • <span className="ml-2">Advanced Algorithms (Live Backend)</span>
+          <p className="text-slate-650 dark:text-slate-400 flex items-center font-medium">
+            <span>{activeCenterId === 1 ? 'Local Campus - Hall 3' : STATIC_CENTERS.find(c => c.id === activeCenterId)?.name}</span>
+            <span className="mx-2">•</span>
+            <span>Advanced Algorithms (Live Telemetry Focus)</span>
           </p>
         </div>
         <div className="text-right bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3 shadow-sm flex items-center space-x-4">
@@ -213,7 +300,7 @@ export default function InvigilatorDashboard() {
             <Users size={24} />
           </div>
           <div>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">{presentCount}<span className="text-lg text-slate-400 font-normal">/50</span></div>
+            <div className="text-2xl font-bold text-slate-900 dark:text-white">{presentCount}<span className="text-lg text-slate-400 font-normal">/{activeExpected}</span></div>
             <div className="text-sm font-medium text-slate-500 dark:text-slate-400">Present</div>
           </div>
         </div>

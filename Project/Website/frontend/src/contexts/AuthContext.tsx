@@ -34,9 +34,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             const fetchedRole = docSnap.data().role as Role;
-            setRole(fetchedRole);
-            if (fetchedRole) {
-              localStorage.setItem('auth_role', fetchedRole);
+            const localRole = localStorage.getItem('auth_role') as Role;
+            if (localRole) {
+              setRole(localRole);
+            } else {
+              setRole(fetchedRole);
+              if (fetchedRole) {
+                localStorage.setItem('auth_role', fetchedRole);
+              }
             }
           } else {
             // Default role if doc not created yet, but check localStorage to prevent race condition during signup
@@ -59,13 +64,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = async () => {
+    setRole(null);
+    localStorage.removeItem('auth_role');
+    localStorage.removeItem('auth_email');
+    localStorage.removeItem('auth_name');
     try {
       await firebaseSignOut(auth);
     } catch(e) {
       console.log("Firebase signout error (or using mock):", e);
     }
-    setRole(null);
-    localStorage.removeItem('auth_role');
   };
 
   const setRoleOverride = (newRole: Role) => {

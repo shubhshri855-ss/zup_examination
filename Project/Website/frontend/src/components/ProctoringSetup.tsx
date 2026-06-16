@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Camera, Mic, MonitorPlay, AlertTriangle, CheckCircle, Smartphone, UserCheck } from 'lucide-react';
+import { Camera, Mic, MonitorPlay, AlertTriangle, CheckCircle, Smartphone, UserCheck, X } from 'lucide-react';
 import * as faceapi from 'face-api.js';
 
-export default function ProctoringSetup({ onComplete }: { onComplete: (stream: MediaStream | null) => void }) {
-  const [step, setStep] = useState(1);
+export default function ProctoringSetup({ onComplete, onClose }: { onComplete: (stream: MediaStream | null) => void; onClose?: () => void }) {
+  const [step, setStep] = useState(() => {
+    const savedStep = sessionStorage.getItem('proctoring_step');
+    return savedStep ? parseInt(savedStep, 10) : 1;
+  });
   const [, setPermissions] = useState({
     camera: false,
     mic: false,
@@ -13,6 +16,24 @@ export default function ProctoringSetup({ onComplete }: { onComplete: (stream: M
   const videoRef = useRef<HTMLVideoElement>(null);
   const [faceStatus, setFaceStatus] = useState<string>('');
   const [isVerifying, setIsVerifying] = useState(false);
+
+  useEffect(() => {
+    sessionStorage.setItem('proctoring_step', step.toString());
+  }, [step]);
+
+  useEffect(() => {
+    if (step > 1 && !stream) {
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(mediaStream => {
+          setStream(mediaStream);
+          setPermissions(prev => ({ ...prev, camera: true, mic: true }));
+        })
+        .catch(err => {
+          console.error("Failed to auto-restore media stream:", err);
+          setStep(1);
+        });
+    }
+  }, [step, stream]);
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `${window.location.protocol}//${window.location.hostname}:5000`);
 
   // 1. Camera & Mic Access
@@ -169,8 +190,15 @@ export default function ProctoringSetup({ onComplete }: { onComplete: (stream: M
 
   return (
     <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-2xl max-w-2xl w-full shadow-xl">
-        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 text-center tracking-tight">Strict Proctoring Setup</h2>
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-2xl max-w-2xl w-full shadow-xl relative animate-fade-in">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Strict Proctoring Setup</h2>
+          {onClose && (
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 transition-colors p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+              <X size={20} />
+            </button>
+          )}
+        </div>
         
         <div className="flex justify-between mb-8 relative">
           <div className="absolute top-5 left-10 right-10 h-[2px] bg-slate-100 dark:bg-slate-800 -z-10"></div>
@@ -226,7 +254,10 @@ export default function ProctoringSetup({ onComplete }: { onComplete: (stream: M
                   <li className="flex items-start"><span className="text-red-500 mr-2 mt-0.5 font-bold">•</span> Full-Screen mode will be enforced to lock you into the ecosystem.</li>
                 </ul>
               </div>
-              <button onClick={enforceEnvironment} className="w-full max-w-xs mx-auto py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md font-semibold transition-colors shadow-sm">Acknowledge & Enforce</button>
+              <div className="flex gap-4 justify-center max-w-md mx-auto">
+                <button type="button" onClick={() => setStep(1)} className="flex-1 py-2.5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Back</button>
+                <button type="button" onClick={enforceEnvironment} className="flex-2 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold transition-colors shadow-sm px-6">Acknowledge & Enforce</button>
+              </div>
             </div>
           )}
 
@@ -235,10 +266,13 @@ export default function ProctoringSetup({ onComplete }: { onComplete: (stream: M
               <video ref={videoRef} autoPlay muted playsInline className="w-full h-56 bg-slate-950 rounded-lg mb-4 object-cover border border-emerald-200 dark:border-emerald-800 shadow-sm transform scale-x-[-1]"></video>
               <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">360° Environment Scan</h3>
               <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">Please pick up your laptop or webcam and slowly rotate 360 degrees to verify your room environment is clear.</p>
-              <button onClick={proceedToFaceVerification} className="w-full max-w-xs mx-auto py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md font-semibold transition-colors shadow-sm flex justify-center items-center">
-                <CheckCircle size={18} className="mr-2" />
-                Scan Complete - Next
-              </button>
+              <div className="flex gap-4 justify-center max-w-md mx-auto">
+                <button type="button" onClick={() => setStep(2)} className="flex-1 py-2.5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Back</button>
+                <button type="button" onClick={proceedToFaceVerification} className="flex-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold transition-colors shadow-sm flex justify-center items-center px-6">
+                  <CheckCircle size={18} className="mr-2" />
+                  Scan Complete - Next
+                </button>
+              </div>
             </div>
           )}
 
@@ -256,10 +290,13 @@ export default function ProctoringSetup({ onComplete }: { onComplete: (stream: M
               <p className={`text-sm mb-6 font-medium ${faceStatus.includes('Failed') || faceStatus.includes('No reference') ? 'text-red-600 dark:text-red-400' : faceStatus.includes('Successfully') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
                 {faceStatus}
               </p>
-              <button onClick={verifyIdentity} disabled={isVerifying || faceStatus.includes('Loading')} className="w-full max-w-xs mx-auto py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-md font-semibold transition-colors shadow-sm flex justify-center items-center">
-                <UserCheck size={18} className="mr-2" />
-                Verify Face & Start Exam
-              </button>
+              <div className="flex gap-4 justify-center max-w-md mx-auto">
+                <button type="button" onClick={() => setStep(3)} disabled={isVerifying} className="flex-1 py-2.5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50">Back</button>
+                <button type="button" onClick={verifyIdentity} disabled={isVerifying || faceStatus.includes('Loading')} className="flex-2 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg font-semibold transition-colors shadow-sm flex justify-center items-center px-6">
+                  <UserCheck size={18} className="mr-2" />
+                  Verify Face & Start Exam
+                </button>
+              </div>
             </div>
           )}
         </div>
