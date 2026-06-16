@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  BarChart3, 
   Users, 
   Activity, 
   ShieldAlert, 
-  TrendingUp, 
   MapPin, 
   CheckCircle, 
-  AlertTriangle, 
   Terminal, 
   Search,
   Globe,
@@ -24,6 +21,7 @@ interface Student {
   status: string;
   seat: string;
   match: number | null;
+  centerId?: number;
 }
 
 interface CheatingAlert {
