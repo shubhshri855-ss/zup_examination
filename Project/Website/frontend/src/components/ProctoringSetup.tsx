@@ -34,7 +34,7 @@ export default function ProctoringSetup({ onComplete, onClose }: { onComplete: (
         });
     }
   }, [step, stream]);
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `https://765e246281d1ae.lhr.life`);
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `https://zup-exam-backend-42.loca.lt`);
 
   // 1. Camera & Mic Access
   const requestMedia = async () => {

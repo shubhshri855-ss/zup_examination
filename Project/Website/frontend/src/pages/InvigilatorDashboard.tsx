@@ -77,7 +77,7 @@ export default function InvigilatorDashboard() {
   const [cheatingAlerts, setCheatingAlerts] = useState<CheatingAlert[]>([]);
   const [capturingForStudent, setCapturingForStudent] = useState<Student | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `https://765e246281d1ae.lhr.life`);
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `https://zup-exam-backend-42.loca.lt`);
 
   const [socket, setSocket] = useState<any>(null);
 
