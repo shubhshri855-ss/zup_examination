@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, MapPin, Clock, Bot, UserCheck, FileText, AlertTriangle, Lock, Smartphone, X, LogOut } from 'lucide-react';
+import { Upload, MapPin, Clock, Bot, UserCheck, FileText, AlertTriangle, Lock, Smartphone, X, LogOut, Radio, Download, CheckCircle2 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import SeatMap3D from '../components/SeatMap3D';
 import ProctoringSetup from '../components/ProctoringSetup';
 import { FaceLandmarker, ObjectDetector, FilesetResolver } from "@mediapipe/tasks-vision";
+import { io } from 'socket.io-client';
+import toast from 'react-hot-toast';
 
 declare global {
   interface Window {
@@ -52,6 +54,78 @@ export default function StudentDashboard() {
 
   const studentName = localStorage.getItem('auth_name') || 'Student';
   const studentEmail = localStorage.getItem('auth_email') || 'student@example.com';
+
+  const [activeExamPaper, setActiveExamPaper] = useState<any>(null);
+  const [examTimeLeft, setExamTimeLeft] = useState<number | null>(null);
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [intent, setIntent] = useState<string>('UNRESOLVED');
+  const [omrAnswers, setOmrAnswers] = useState<string[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const socketRef = useRef<any>(null);
+
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `${window.location.protocol}//${window.location.hostname}:5000`);
+
+  useEffect(() => {
+    const socket = io(BACKEND_URL);
+    socketRef.current = socket;
+
+    const sendAck = () => {
+      const sName = localStorage.getItem('auth_name') || 'John Doe';
+      const sRoll = localStorage.getItem('auth_roll') || 'CS-2026-442';
+      socket.emit('paper_received_ack', { name: sName, roll: sRoll });
+    };
+
+    fetch(`${BACKEND_URL}/api/active-exam-paper`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.startTime) {
+          setActiveExamPaper(data);
+          sendAck();
+        }
+      })
+      .catch(err => console.error('Failed to fetch active exam paper', err));
+
+    socket.on('exam_paper_published', (paper: any) => {
+      setActiveExamPaper(paper);
+      sendAck();
+      toast.success(`📄 Question Paper Broadcasted by Invigilator: "${paper.title}"! 3-Hour Exam Timer Started!`);
+    });
+
+    socket.on('exam_paper_reset', () => {
+      setActiveExamPaper(null);
+      setExamTimeLeft(null);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [BACKEND_URL]);
+
+  useEffect(() => {
+    if (!activeExamPaper?.startTime) {
+      setExamTimeLeft(null);
+      return;
+    }
+
+    const updateTimer = () => {
+      const elapsed = Math.floor((Date.now() - activeExamPaper.startTime) / 1000);
+      const duration = activeExamPaper.durationSeconds || 10800; // 3 hours
+      const remaining = Math.max(0, duration - elapsed);
+      setExamTimeLeft(remaining);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [activeExamPaper]);
+
+  const formatTimer = (totalSeconds: number | null) => {
+    if (totalSeconds === null) return '03:00:00';
+    const hrs = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   const [warnings, setWarnings] = useState(0);
   const [proctorMessage, setProctorMessage] = useState("Initializing Proctoring...");
@@ -410,13 +484,30 @@ export default function StudentDashboard() {
                 <span className="w-2 h-2 rounded-full bg-red-500 mr-2 animate-pulse"></span>
                 Live Monitored
               </div>
-              <button onClick={() => {
+              <button onClick={async () => {
                  if (window.confirm("Are you sure you want to submit your exam?")) {
                     setExamTerminated(true);
                     if (window.electronAPI) {
                        window.electronAPI.endExam();
                     }
-                    alert("Exam submitted successfully!");
+                    
+                    try {
+                       const sRoll = localStorage.getItem('auth_roll') || 'CS-2026-442';
+                       const res = await fetch(`${BACKEND_URL}/api/submit-exam`, {
+                         method: 'POST',
+                         headers: { 'Content-Type': 'application/json' },
+                         body: JSON.stringify({ roll: sRoll, answers: omrAnswers })
+                       });
+                       const data = await res.json();
+                       if (data.success) {
+                         alert(`Exam submitted successfully!\nYour Score: ${data.score}/${data.maxScore}`);
+                       } else {
+                         alert("Exam submitted successfully!");
+                       }
+                    } catch (err) {
+                       console.error(err);
+                       alert("Exam submitted successfully! (Offline mode)");
+                    }
                     window.location.reload();
                  }
               }} className="btn-primary py-2 px-6 font-semibold shadow-sm">
@@ -469,6 +560,38 @@ export default function StudentDashboard() {
           </div>
         </div>
       </header>
+
+      {activeExamPaper && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white rounded-2xl p-5 shadow-lg border border-indigo-700/50 flex justify-between items-center flex-wrap gap-4"
+        >
+          <div className="flex items-center space-x-4">
+            <div className="p-3 bg-indigo-500/20 rounded-xl border border-indigo-400/30">
+              <Radio className="text-indigo-300 animate-pulse" size={24} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded">
+                  Live Broadcast Active
+                </span>
+                <span className="text-xs font-mono text-indigo-200">
+                  Time Remaining: {formatTimer(examTimeLeft)}
+                </span>
+              </div>
+              <h3 className="font-bold text-lg text-white mt-1">{activeExamPaper.title}</h3>
+              <p className="text-xs text-indigo-200">Invigilator has broadcasted the official PDF question paper.</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => setShowPdfModal(true)}
+            className="px-5 py-2.5 bg-white text-indigo-900 hover:bg-indigo-50 font-bold rounded-xl text-xs shadow-md transition-colors flex items-center gap-2"
+          >
+            <FileText size={16} /> View Question Paper PDF
+          </button>
+        </motion.div>
+      )}
 
       {examStarted ? (
         <div className="grid lg:grid-cols-4 gap-8">
@@ -593,9 +716,17 @@ export default function StudentDashboard() {
                   <Clock size={16} className="mr-2" />
                   <h3 className="font-semibold text-xs uppercase tracking-wider">Time Remaining</h3>
                 </div>
-                <div className="text-4xl font-mono font-bold text-slate-900 dark:text-white">
-                  <span className="text-primary-600 dark:text-primary-400">02</span>:59:59
+                <div className="text-3xl font-mono font-bold text-primary-600 dark:text-primary-400 tracking-tight">
+                  {formatTimer(examTimeLeft)}
                 </div>
+                {activeExamPaper && (
+                  <button 
+                    onClick={() => setShowPdfModal(true)}
+                    className="mt-3 w-full py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/40 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <FileText size={14} /> View Broadcasted PDF
+                  </button>
+                )}
             </div>
 
             {/* Question Navigator */}
@@ -625,6 +756,40 @@ export default function StudentDashboard() {
                 <div className="flex items-center"><div className="w-3 h-3 rounded bg-emerald-500 mr-2"></div> Answered</div>
                 <div className="flex items-center"><div className="w-3 h-3 rounded bg-primary-500 mr-2"></div> Current</div>
                 <div className="flex items-center"><div className="w-3 h-3 rounded bg-slate-200 dark:bg-slate-700 mr-2"></div> Unanswered</div>
+              </div>
+            </div>
+
+            {/* Intent Capture / Completion Signal */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl p-5">
+              <h3 className="text-sm font-semibold mb-4 text-slate-900 dark:text-white">Completion Signal</h3>
+              <p className="text-xs text-slate-500 mb-4">Signal your current progress to the invigilator.</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'COMPLETE', label: 'Complete', color: 'bg-emerald-500' },
+                  { id: 'PARTIAL', label: 'Partial', color: 'bg-amber-500' },
+                  { id: 'BLOCKED', label: 'Blocked', color: 'bg-red-500' },
+                  { id: 'UNRESOLVED', label: 'Unresolved', color: 'bg-slate-400' }
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => {
+                      setIntent(opt.id);
+                      if (socketRef.current) {
+                        const sName = localStorage.getItem('auth_name') || 'John Doe';
+                        const sRoll = localStorage.getItem('auth_roll') || 'CS-2026-442';
+                        socketRef.current.emit('student_intent_update', { name: sName, roll: sRoll, intent: opt.id });
+                      }
+                    }}
+                    className={`flex items-center justify-center p-2 rounded-lg text-xs font-semibold border-2 transition-colors ${
+                      intent === opt.id 
+                        ? `border-${opt.color.replace('bg-', '')} ${opt.color} text-white`
+                        : `border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300`
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full mr-1.5 ${intent === opt.id ? 'bg-white' : opt.color}`}></span>
+                    {opt.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -806,6 +971,76 @@ export default function StudentDashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Broadcasted PDF Question Paper Modal */}
+      {showPdfModal && activeExamPaper && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white text-base flex items-center gap-2">
+                  <FileText className="text-indigo-500" size={18} />
+                  {activeExamPaper.title}
+                </h3>
+                <p className="text-xs text-slate-500">Subject: {activeExamPaper.subject} • Live Time Remaining: {formatTimer(examTimeLeft)}</p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <a 
+                  href={activeExamPaper.pdfDataUrl} 
+                  download={`${activeExamPaper.title}.pdf`}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                >
+                  <Download size={14} /> Download PDF
+                </a>
+                <button 
+                  onClick={() => setShowPdfModal(false)}
+                  className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="flex-grow bg-slate-900 p-2 flex">
+              <div className={activeExamPaper.answerKey?.length ? "w-3/4 pr-2" : "w-full"}>
+                <iframe 
+                  src={activeExamPaper.pdfDataUrl} 
+                  title="Broadcasted Question Paper" 
+                  className="w-full h-full rounded-lg bg-white"
+                />
+              </div>
+              {activeExamPaper.answerKey?.length > 0 && (
+                <div className="w-1/4 bg-white dark:bg-slate-900 rounded-lg p-4 ml-2 overflow-y-auto">
+                  <h4 className="font-bold text-sm mb-4 text-slate-800 dark:text-slate-200">OMR Answer Sheet</h4>
+                  {activeExamPaper.answerKey.map((_: unknown, idx: number) => (
+                    <div key={idx} className="mb-4">
+                      <p className="text-xs font-semibold mb-2 text-slate-600 dark:text-slate-400">Question {idx + 1}</p>
+                      <div className="flex gap-2">
+                        {['A','B','C','D'].map(opt => (
+                          <button 
+                            key={opt}
+                            onClick={() => {
+                              const newAns = [...omrAnswers];
+                              newAns[idx] = opt;
+                              setOmrAnswers(newAns);
+                            }}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+                              omrAnswers[idx] === opt 
+                                ? 'bg-emerald-500 border-emerald-500 text-white shadow-md transform scale-110' 
+                                : 'border-slate-300 text-slate-500 hover:border-slate-400'
+                            }`}
+                          >
+                            {omrAnswers[idx] === opt ? <CheckCircle2 size={14} /> : opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

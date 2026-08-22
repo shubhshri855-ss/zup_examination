@@ -7,7 +7,8 @@ const nodemailer = require('nodemailer');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -21,6 +22,10 @@ const io = new Server(server, {
 let students = [];
 let activeCenterId = 1;
 let nextId = 1;
+
+// In-memory active exam paper store & broadcast delivery receipts
+let activeExamPaper = null;
+let broadcastReceipts = new Map();
 
 // In-memory OTP store (email -> { otp, expires })
 const otps = new Map();
@@ -221,9 +226,135 @@ app.post('/api/cheat', (req, res) => {
   res.json({ success: true });
 });
 
+// Exam Paper Broadcast Endpoints
+app.get('/api/active-exam-paper', (req, res) => {
+  if (activeExamPaper && activeExamPaper.startTime) {
+    const elapsed = Math.floor((Date.now() - activeExamPaper.startTime) / 1000);
+    const duration = activeExamPaper.durationSeconds || 10800; // 3 hours
+    const remainingSeconds = Math.max(0, duration - elapsed);
+    return res.json({ ...activeExamPaper, remainingSeconds });
+  }
+  res.json(null);
+});
+
+app.get('/api/broadcast-stats', (req, res) => {
+  const deliveredList = Array.from(broadcastReceipts.values());
+  res.json({
+    deliveredCount: deliveredList.length,
+    deliveredStudents: deliveredList
+  });
+});
+
+app.post('/api/publish-exam-paper', (req, res) => {
+  const { title, subject, pdfDataUrl, questions, durationSeconds, answerKey } = req.body;
+  if (!title || !pdfDataUrl) {
+    return res.status(400).json({ error: 'Title and PDF document are required' });
+  }
+
+  broadcastReceipts.clear();
+
+  const duration = durationSeconds || 10800; // 3 hours (10,800 seconds)
+  activeExamPaper = {
+    id: Date.now(),
+    title: title || 'Advanced Examination Paper',
+    subject: subject || 'General Examination',
+    pdfDataUrl,
+    questions: questions || [],
+    answerKey: answerKey || [], // Array of strings e.g. ['A', 'B', 'C']
+    startTime: Date.now(),
+    durationSeconds: duration
+  };
+
+  const remainingSeconds = duration;
+  const broadcastData = { ...activeExamPaper, remainingSeconds };
+
+  console.log(`[EXAM BROADCAST] Published paper "${title}" with 3-hour timer.`);
+  io.emit('exam_paper_published', broadcastData);
+  io.emit('broadcast_stats_updated', { deliveredCount: 0, deliveredStudents: [] });
+
+  res.json({ success: true, activeExamPaper: broadcastData });
+});
+
+app.post('/api/reset-exam-paper', (req, res) => {
+  activeExamPaper = null;
+  broadcastReceipts.clear();
+  io.emit('exam_paper_reset');
+  io.emit('broadcast_stats_updated', { deliveredCount: 0, deliveredStudents: [] });
+  console.log(`[EXAM BROADCAST] Exam paper reset.`);
+  res.json({ success: true });
+});
+
+app.post('/api/submit-exam', (req, res) => {
+  const { roll, answers } = req.body;
+  if (!roll) {
+    return res.status(400).json({ error: 'Roll number is required' });
+  }
+
+  const student = students.find(s => s.roll === roll);
+  if (!student) {
+    return res.status(404).json({ error: 'Student not found' });
+  }
+
+  let score = 0;
+  const maxScore = activeExamPaper && activeExamPaper.answerKey ? activeExamPaper.answerKey.length : 0;
+  
+  if (activeExamPaper && activeExamPaper.answerKey && activeExamPaper.answerKey.length > 0 && answers) {
+    for (let i = 0; i < maxScore; i++) {
+      if (answers[i] === activeExamPaper.answerKey[i]) {
+        score++;
+      }
+    }
+  }
+
+  student.status = 'submitted';
+  student.score = score;
+  student.maxScore = maxScore;
+  student.answers = answers;
+  student.intent = 'COMPLETE';
+
+  console.log(`[EXAM SUBMITTED] ${student.name} (${roll}) Score: ${score}/${maxScore}`);
+  io.emit('student_updated', student);
+  
+  res.json({ success: true, score, maxScore });
+});
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('A client connected:', socket.id);
+  
+  if (activeExamPaper && activeExamPaper.startTime) {
+    const elapsed = Math.floor((Date.now() - activeExamPaper.startTime) / 1000);
+    const remainingSeconds = Math.max(0, (activeExamPaper.durationSeconds || 10800) - elapsed);
+    socket.emit('exam_paper_published', { ...activeExamPaper, remainingSeconds });
+  }
+
+  // Send current broadcast stats upon connection
+  const initialDelivered = Array.from(broadcastReceipts.values());
+  socket.emit('broadcast_stats_updated', { deliveredCount: initialDelivered.length, deliveredStudents: initialDelivered });
+
+  // Handle PDF received acknowledgment from students
+  socket.on('paper_received_ack', (data) => {
+    if (!data || !data.roll) return;
+    const studentKey = (data.roll || socket.id).toString().toLowerCase();
+    const record = {
+      socketId: socket.id,
+      roll: data.roll,
+      name: data.name || 'Student',
+      time: new Date().toLocaleTimeString()
+    };
+    broadcastReceipts.set(studentKey, record);
+    const updatedList = Array.from(broadcastReceipts.values());
+    console.log(`[PDF ACK] PDF delivered to ${record.name} (${record.roll}). Total delivered: ${updatedList.length}`);
+    io.emit('broadcast_stats_updated', { deliveredCount: updatedList.length, deliveredStudents: updatedList });
+  });
+
+  // Handle student intent updates (Round 2 Feature)
+  socket.on('student_intent_update', (data) => {
+    if (!data || !data.roll) return;
+    console.log(`[INTENT] ${data.name} (${data.roll}) updated status to: ${data.intent}`);
+    io.emit('student_intent_updated', data);
+  });
+
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
   });

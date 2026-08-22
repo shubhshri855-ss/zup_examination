@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Users, CheckCircle, AlertCircle, Search, UserCheck, Plus, Trash2, Clock, Camera } from 'lucide-react';
 import { io } from 'socket.io-client';
 import CameraCaptureModal from '../components/CameraCaptureModal';
+import ExamPaperBroadcaster from '../components/ExamPaperBroadcaster';
 
 interface Student {
   id: number;
@@ -11,8 +12,11 @@ interface Student {
   status: string;
   seat: string;
   match: number | null;
-  referenceDescriptor?: number[];
   centerId?: number;
+  intent?: string;
+  score?: number;
+  maxScore?: number;
+  referenceDescriptor?: number[];
 }
 
 interface CheatingAlert {
@@ -75,6 +79,8 @@ export default function InvigilatorDashboard() {
   const [isAdding, setIsAdding] = useState(false);
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `${window.location.protocol}//${window.location.hostname}:5000`);
 
+  const [socket, setSocket] = useState<any>(null);
+
   useEffect(() => {
     // Fetch active center first
     fetch(`${BACKEND_URL}/api/active-center`)
@@ -98,32 +104,37 @@ export default function InvigilatorDashboard() {
       })
       .catch(err => console.error('Failed to fetch students', err));
 
-    const socket = io(BACKEND_URL);
+    const socketInstance = io(BACKEND_URL);
+    setSocket(socketInstance);
     
-    socket.on('active_center_changed', (centerId: number) => {
+    socketInstance.on('active_center_changed', (centerId: number) => {
       setActiveCenterId(centerId);
     });
 
-    socket.on('student_added', (student: Student) => {
+    socketInstance.on('student_added', (student: Student) => {
       setStudents(prev => [...prev, student]);
     });
 
-    socket.on('student_updated', (updatedStudent: Student) => {
+    socketInstance.on('student_updated', (updatedStudent: Student) => {
       setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
     });
 
-    socket.on('cheating_attempt', (alert: CheatingAlert) => {
+    socketInstance.on('cheating_attempt', (alert: CheatingAlert) => {
       setCheatingAlerts(prev => [alert, ...prev].slice(0, 5)); // Keep latest 5 alerts
       // Automatically flag the student if they exist
       setStudents(prev => prev.map(s => s.roll === alert.roll ? { ...s, status: 'flagged' } : s));
     });
 
-    socket.on('student_deleted', (deletedStudent: Student) => {
+    socketInstance.on('student_intent_updated', (data: {roll: string, intent: string}) => {
+      setStudents(prev => prev.map(s => s.roll === data.roll ? { ...s, intent: data.intent } : s));
+    });
+
+    socketInstance.on('student_deleted', (deletedStudent: Student) => {
       setStudents(prev => prev.filter(s => s.id !== deletedStudent.id));
     });
 
     return () => {
-      socket.disconnect();
+      socketInstance.disconnect();
     };
   }, []);
 
@@ -294,6 +305,9 @@ export default function InvigilatorDashboard() {
         </div>
       )}
 
+      {/* Invigilator Question Paper Broadcast & 3-Hour Timer */}
+      <ExamPaperBroadcaster socket={socket} backendUrl={BACKEND_URL} totalExpected={activeExpected} presentCount={presentCount} />
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl p-6 flex items-center space-x-4">
           <div className="bg-primary-50 dark:bg-primary-900/20 p-3.5 rounded-lg text-primary-600 dark:text-primary-400 border border-primary-100 dark:border-primary-800/30">
@@ -354,7 +368,9 @@ export default function InvigilatorDashboard() {
                 <th className="p-4">Student Name</th>
                 <th className="p-4">Seat</th>
                 <th className="p-4">AI Match</th>
+                <th className="p-4">Intent</th>
                 <th className="p-4">Status</th>
+                <th className="p-4">Score</th>
                 <th className="p-4 pr-6 text-right">Action</th>
               </tr>
             </thead>
@@ -385,10 +401,29 @@ export default function InvigilatorDashboard() {
                       )}
                     </td>
                     <td className="p-4">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold ${
+                        student.intent === 'COMPLETE' ? 'bg-emerald-100 text-emerald-700' :
+                        student.intent === 'PARTIAL' ? 'bg-amber-100 text-amber-700' :
+                        student.intent === 'BLOCKED' ? 'bg-red-100 text-red-700' :
+                        'bg-slate-100 text-slate-700'
+                      }`}>
+                        {student.intent || 'UNRESOLVED'}
+                      </span>
+                    </td>
+                    <td className="p-4">
                       <div className="flex items-center space-x-2">
                         {getStatusIcon(student.status)}
                         <span className="capitalize text-sm font-medium text-slate-700 dark:text-slate-300">{student.status}</span>
                       </div>
+                    </td>
+                    <td className="p-4 font-mono font-bold text-slate-800 dark:text-slate-200">
+                      {student.status === 'submitted' ? (
+                        <span className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 px-2 py-1 rounded text-xs border border-indigo-200 dark:border-indigo-800">
+                          {student.score} / {student.maxScore}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
                     </td>
                     <td className="p-4 pr-6 text-right">
                       <div className="flex items-center justify-end space-x-2">
