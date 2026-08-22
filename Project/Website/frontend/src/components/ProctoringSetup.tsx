@@ -150,7 +150,8 @@ export default function ProctoringSetup({ onComplete, onClose }: { onComplete: (
 
       const referenceDescriptor = new Float32Array(student.referenceDescriptor);
 
-      const detection = await faceapi.detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions())
+      // Use optimized TinyFaceDetector parameters: inputSize 320 for speed, scoreThreshold 0.3 for low light detection
+      const detection = await faceapi.detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 }))
         .withFaceLandmarks()
         .withFaceDescriptor();
 
@@ -162,13 +163,15 @@ export default function ProctoringSetup({ onComplete, onClose }: { onComplete: (
 
       // Calculate Euclidean distance
       const distance = faceapi.euclideanDistance(detection.descriptor, referenceDescriptor);
-      if (distance < 0.55) {
+      
+      // 0.60 is the standard recommended face-api.js threshold for matching
+      if (distance < 0.60) {
         setFaceStatus('Identity Verified Successfully!');
         setTimeout(() => {
           onComplete(stream);
         }, 1500);
       } else {
-        setFaceStatus('Identity Verification Failed! Face does not match the registered student.');
+        setFaceStatus(`Identity Verification Failed! Face does not match the registered student (Distance: ${distance.toFixed(2)}, match threshold: 0.60).`);
         setIsVerifying(false);
         
         // Report failure to backend

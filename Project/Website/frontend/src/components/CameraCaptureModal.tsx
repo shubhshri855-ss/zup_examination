@@ -72,7 +72,8 @@ export default function CameraCaptureModal({ onClose, onCapture, studentName }: 
     if (!videoRef.current) return;
     setLoading('Detecting Face...');
     try {
-      const detection = await faceapi.detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions())
+      // Use optimized TinyFaceDetector parameters: inputSize 320 for speed, scoreThreshold 0.3 for low light detection
+      const detection = await faceapi.detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 }))
         .withFaceLandmarks()
         .withFaceDescriptor();
 
