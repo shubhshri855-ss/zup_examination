@@ -116,7 +116,7 @@ export default function ProctoringSetup({ onComplete, onClose }: { onComplete: (
       try {
         const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
         await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
           faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
         ]);
@@ -150,8 +150,8 @@ export default function ProctoringSetup({ onComplete, onClose }: { onComplete: (
 
       const referenceDescriptor = new Float32Array(student.referenceDescriptor);
 
-      // Use optimized TinyFaceDetector parameters: inputSize 320 for speed, scoreThreshold 0.3 for low light detection
-      const detection = await faceapi.detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 }))
+      // Use SsdMobilenetv1 with low confidence threshold (0.15) to detect faces in low light
+      const detection = await faceapi.detectSingleFace(videoRef.current, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.15 }))
         .withFaceLandmarks()
         .withFaceDescriptor();
 
@@ -164,14 +164,14 @@ export default function ProctoringSetup({ onComplete, onClose }: { onComplete: (
       // Calculate Euclidean distance
       const distance = faceapi.euclideanDistance(detection.descriptor, referenceDescriptor);
       
-      // 0.60 is the standard recommended face-api.js threshold for matching
-      if (distance < 0.60) {
+      // 0.65 is a relaxed threshold (industry standard is 0.60, 0.65 is more lenient for varying lighting/angles)
+      if (distance < 0.65) {
         setFaceStatus('Identity Verified Successfully!');
         setTimeout(() => {
           onComplete(stream);
         }, 1500);
       } else {
-        setFaceStatus(`Identity Verification Failed! Face does not match the registered student (Distance: ${distance.toFixed(2)}, match threshold: 0.60).`);
+        setFaceStatus(`Identity Verification Failed! Face does not match the registered student (Distance: ${distance.toFixed(2)}, match threshold: 0.65).`);
         setIsVerifying(false);
         
         // Report failure to backend

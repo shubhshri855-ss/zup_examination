@@ -21,7 +21,7 @@ export default function CameraCaptureModal({ onClose, onCapture, studentName }: 
       try {
         const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
         await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
           faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
         ]);
@@ -72,8 +72,8 @@ export default function CameraCaptureModal({ onClose, onCapture, studentName }: 
     if (!videoRef.current) return;
     setLoading('Detecting Face...');
     try {
-      // Use optimized TinyFaceDetector parameters: inputSize 320 for speed, scoreThreshold 0.3 for low light detection
-      const detection = await faceapi.detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 }))
+      // Use SsdMobilenetv1 with low confidence threshold (0.15) to detect faces in low light
+      const detection = await faceapi.detectSingleFace(videoRef.current, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.15 }))
         .withFaceLandmarks()
         .withFaceDescriptor();
 
