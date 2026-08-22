@@ -69,7 +69,7 @@ export default function StudentDashboard() {
   const [activeExamPaper, setActiveExamPaper] = useState<any>(null);
   const [examTimeLeft, setExamTimeLeft] = useState<number | null>(null);
   const [showPdfModal, setShowPdfModal] = useState(false);
-  const [intent, setIntent] = useState<string>('UNRESOLVED');
+  const [intent, setIntent] = useState<string>('PARTIAL');
   const [omrAnswers, setOmrAnswers] = useState<string[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const socketRef = useRef<any>(null);
@@ -508,6 +508,12 @@ export default function StudentDashboard() {
               <button onClick={async () => {
                  if (window.confirm("Are you sure you want to submit your exam?")) {
                     setExamTerminated(true);
+                    setIntent('COMPLETE');
+                    if (socketRef.current) {
+                      const sName = localStorage.getItem('auth_name') || 'John Doe';
+                      const sRoll = localStorage.getItem('auth_roll') || 'CS-2026-442';
+                      socketRef.current.emit('student_intent_update', { name: sName, roll: sRoll, intent: 'COMPLETE' });
+                    }
                     if (window.electronAPI) {
                        window.electronAPI.endExam();
                     }
