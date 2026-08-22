@@ -22,9 +22,8 @@ export default function StudentDashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem('auth_token');
-    const role = localStorage.getItem('auth_role');
-    if (!token || role !== 'STUDENT') {
+    const email = localStorage.getItem('auth_email');
+    if (!email) {
       toast.error('Authentication required. Please login.');
       navigate('/');
     }
