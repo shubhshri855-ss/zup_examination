@@ -7,6 +7,7 @@ import ProctoringSetup from '../components/ProctoringSetup';
 import { FaceLandmarker, ObjectDetector, FilesetResolver } from "@mediapipe/tasks-vision";
 import { io } from 'socket.io-client';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 declare global {
   interface Window {
@@ -18,6 +19,17 @@ declare global {
 }
 
 export default function StudentDashboard() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    const role = localStorage.getItem('auth_role');
+    if (!token || role !== 'STUDENT') {
+      toast.error('Authentication required. Please login.');
+      navigate('/');
+    }
+  }, [navigate]);
+
   const [ocrStatus, setOcrStatus] = useState<'idle' | 'processing' | 'done'>('idle');
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -571,7 +583,7 @@ export default function StudentDashboard() {
         </div>
       </header>
 
-      {activeExamPaper && (
+      {examStarted && activeExamPaper && (
         <motion.div 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -743,7 +755,7 @@ export default function StudentDashboard() {
                 <div className="text-3xl font-mono font-bold text-primary-600 dark:text-primary-400 tracking-tight">
                   {formatTimer(examTimeLeft)}
                 </div>
-                {activeExamPaper && (
+                {examStarted && activeExamPaper && (
                   <button 
                     onClick={() => setShowPdfModal(true)}
                     className="mt-3 w-full py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/40 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
@@ -1036,7 +1048,7 @@ export default function StudentDashboard() {
       </AnimatePresence>
 
       {/* Broadcasted PDF Question Paper Modal */}
-      {showPdfModal && activeExamPaper && (
+      {examStarted && showPdfModal && activeExamPaper && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl overflow-hidden">
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
