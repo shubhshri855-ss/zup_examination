@@ -444,7 +444,47 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-8 text-center text-sm">
+          {/* Demo Credentials Section */}
+          <div className="mt-8 flex flex-col gap-2 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 w-full max-w-md mx-auto">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider text-center mb-1">Demo Credentials</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('student@demo.com');
+                  setPassword('Password@123');
+                  setLoginType('student');
+                }}
+                className="flex-1 py-1.5 px-2 text-xs font-medium bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors shadow-sm"
+              >
+                Student
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('invigilator@demo.com');
+                  setPassword('Password@123');
+                  setLoginType('invigilator');
+                }}
+                className="flex-1 py-1.5 px-2 text-xs font-medium bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors shadow-sm"
+              >
+                Invigilator
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('admin@demo.com');
+                  setPassword('Password@123');
+                  setLoginType('admin');
+                }}
+                className="flex-1 py-1.5 px-2 text-xs font-medium bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors shadow-sm"
+              >
+                Admin
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 text-center text-sm">
             <span className="text-slate-500">
               {isLogin ? "Don't have an account? " : "Already have an account? "}
             </span>

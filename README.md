@@ -209,9 +209,11 @@ This produces an NSIS installer and a portable `.exe` in the `dist/` folder.
 ---
 ## Demo Ids
 Student Login : 
-Mail :- shubh@gmail.com & Password :- 12345678 
+Mail :- student@demo.com & Password :- Password@123
 Invigilator : 
-Mail :- harsh@gmail.com & Password :- 12345678 
+Mail :- invigilator@demo.com & Password :- Password@123
+Admin Login:
+Mail :- admin@demo.com & Password :- Password@123
 
 ## API Reference
 
