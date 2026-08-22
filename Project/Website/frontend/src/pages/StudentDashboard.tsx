@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, MapPin, Clock, Bot, UserCheck, FileText, AlertTriangle, Lock, Smartphone, X, LogOut, Radio, Download, CheckCircle2 } from 'lucide-react';
+import { Upload, MapPin, Clock, Bot, UserCheck, FileText, AlertTriangle, Lock, Smartphone, X, LogOut, Radio, Download, CheckCircle2, Bookmark } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import SeatMap3D from '../components/SeatMap3D';
 import ProctoringSetup from '../components/ProctoringSetup';
@@ -177,6 +177,16 @@ export default function StudentDashboard() {
   ];
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [visited, setVisited] = useState<Set<number>>(new Set([0]));
+  const [reviewed, setReviewed] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    setVisited(prev => {
+      const newSet = new Set(prev);
+      newSet.add(currentQuestion);
+      return newSet;
+    });
+  }, [currentQuestion]);
 
   const terminateExam = useCallback((reason: string = "You violated the strict full-screen policy.") => {
     if (mediaStream) {
@@ -667,6 +677,20 @@ export default function StudentDashboard() {
                    Previous
                  </button>
                  <button 
+                   onClick={() => {
+                     setReviewed(prev => {
+                       const newSet = new Set(prev);
+                       if (newSet.has(currentQuestion)) newSet.delete(currentQuestion);
+                       else newSet.add(currentQuestion);
+                       return newSet;
+                     });
+                   }}
+                   className={`flex items-center px-6 py-3 rounded-lg font-medium transition-colors ${reviewed.has(currentQuestion) ? 'bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-300 dark:bg-fuchsia-900/30 dark:border-fuchsia-800 dark:text-fuchsia-400' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700'}`}
+                 >
+                   <Bookmark className="w-4 h-4 mr-2" />
+                   {reviewed.has(currentQuestion) ? 'Marked for Review' : 'Mark for Review'}
+                 </button>
+                 <button 
                    onClick={() => setCurrentQuestion(prev => Math.min(questions.length - 1, prev + 1))}
                    disabled={currentQuestion === questions.length - 1}
                    className="btn-primary px-8 py-3"
@@ -734,28 +758,44 @@ export default function StudentDashboard() {
               <h3 className="text-sm font-semibold mb-4 text-slate-900 dark:text-white">Question Palette</h3>
               <div className="grid grid-cols-4 gap-2">
                 {questions.map((_, idx) => {
-                  let statusClass = "bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700";
+                  let statusClass = "bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"; // Unseen
+                  
                   if (currentQuestion === idx) {
-                    statusClass = "bg-primary-600 border-primary-600 text-white z-10 shadow-sm";
+                    statusClass = "bg-primary-600 border-primary-600 text-white z-10 shadow-sm"; // Current
+                  } else if (reviewed.has(idx) && answers[idx]) {
+                    statusClass = "bg-fuchsia-600 border-fuchsia-600 text-white shadow-sm"; // Reviewed & Answered
+                  } else if (reviewed.has(idx) && !answers[idx]) {
+                    statusClass = "bg-fuchsia-600 border-fuchsia-600 text-white shadow-sm"; // Reviewed Unanswered
                   } else if (answers[idx]) {
-                    statusClass = "bg-emerald-500 border-emerald-500 text-white shadow-sm";
+                    statusClass = "bg-emerald-500 border-emerald-500 text-white shadow-sm"; // Answered
+                  } else if (visited.has(idx)) {
+                    statusClass = "bg-rose-500 border-rose-500 text-white shadow-sm"; // Unanswered
                   }
                   
                   return (
                     <button
                       key={idx}
                       onClick={() => setCurrentQuestion(idx)}
-                      className={`w-full aspect-square rounded-md flex items-center justify-center text-sm font-medium transition-colors ${statusClass}`}
+                      className={`relative w-full aspect-square rounded-md flex items-center justify-center text-sm font-medium transition-colors ${statusClass}`}
                     >
                       {idx + 1}
+                      {reviewed.has(idx) && answers[idx] && <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center"><CheckCircle2 className="w-2.5 h-2.5 text-white" /></div>}
                     </button>
                   );
                 })}
               </div>
-              <div className="mt-6 flex flex-col gap-2 text-xs text-slate-500">
-                <div className="flex items-center"><div className="w-3 h-3 rounded bg-emerald-500 mr-2"></div> Answered</div>
-                <div className="flex items-center"><div className="w-3 h-3 rounded bg-primary-500 mr-2"></div> Current</div>
-                <div className="flex items-center"><div className="w-3 h-3 rounded bg-slate-200 dark:bg-slate-700 mr-2"></div> Unanswered</div>
+              <div className="mt-6 grid grid-cols-2 gap-2 text-[10px] sm:text-xs text-slate-600 dark:text-slate-400">
+                <div className="flex items-center"><div className="w-3 h-3 rounded bg-emerald-500 mr-2 shrink-0"></div> Answered</div>
+                <div className="flex items-center"><div className="w-3 h-3 rounded bg-rose-500 mr-2 shrink-0"></div> Unanswered</div>
+                <div className="flex items-center"><div className="w-3 h-3 rounded bg-fuchsia-600 mr-2 shrink-0"></div> Reviewed</div>
+                <div className="flex items-center relative">
+                  <div className="w-3 h-3 rounded bg-fuchsia-600 mr-2 relative shrink-0">
+                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full border border-white dark:border-slate-900"></div>
+                  </div> 
+                  Reviewed & Answered
+                </div>
+                <div className="flex items-center"><div className="w-3 h-3 rounded bg-slate-100 border border-slate-300 dark:border-slate-600 dark:bg-slate-800 mr-2 shrink-0"></div> Unseen</div>
+                <div className="flex items-center"><div className="w-3 h-3 rounded bg-primary-600 mr-2 shrink-0"></div> Current</div>
               </div>
             </div>
 
