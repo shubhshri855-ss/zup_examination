@@ -762,34 +762,57 @@ export default function StudentDashboard() {
             {/* Intent Capture / Completion Signal */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl p-5">
               <h3 className="text-sm font-semibold mb-4 text-slate-900 dark:text-white">Completion Signal</h3>
-              <p className="text-xs text-slate-500 mb-4">Signal your current progress to the invigilator.</p>
-              <div className="grid grid-cols-2 gap-2">
+              <p className="text-xs text-slate-500 mb-6">Signal your current progress level to the invigilator.</p>
+              
+              <div className="relative flex justify-between items-center w-full px-2 mb-2">
+                {/* Background Line */}
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full" />
+                
+                {/* Active Progress Line */}
+                <div 
+                  className="absolute left-0 top-1/2 -translate-y-1/2 h-1.5 bg-primary-500 rounded-full transition-all duration-500"
+                  style={{ 
+                    width: intent === 'UNRESOLVED' ? '0%' : 
+                           intent === 'BLOCKED' ? '33.33%' : 
+                           intent === 'PARTIAL' ? '66.66%' : '100%' 
+                  }}
+                />
+
                 {[
-                  { id: 'COMPLETE', label: 'Complete', color: 'bg-emerald-500' },
-                  { id: 'PARTIAL', label: 'Partial', color: 'bg-amber-500' },
-                  { id: 'BLOCKED', label: 'Blocked', color: 'bg-red-500' },
-                  { id: 'UNRESOLVED', label: 'Unresolved', color: 'bg-slate-400' }
-                ].map(opt => (
-                  <button
-                    key={opt.id}
-                    onClick={() => {
-                      setIntent(opt.id);
-                      if (socketRef.current) {
-                        const sName = localStorage.getItem('auth_name') || 'John Doe';
-                        const sRoll = localStorage.getItem('auth_roll') || 'CS-2026-442';
-                        socketRef.current.emit('student_intent_update', { name: sName, roll: sRoll, intent: opt.id });
-                      }
-                    }}
-                    className={`flex items-center justify-center p-2 rounded-lg text-xs font-semibold border-2 transition-colors ${
-                      intent === opt.id 
-                        ? `border-${opt.color.replace('bg-', '')} ${opt.color} text-white`
-                        : `border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300`
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full mr-1.5 ${intent === opt.id ? 'bg-white' : opt.color}`}></span>
-                    {opt.label}
-                  </button>
-                ))}
+                  { id: 'UNRESOLVED', label: 'Unresolved', icon: '1', index: 0 },
+                  { id: 'BLOCKED', label: 'Blocked', icon: '2', index: 1 },
+                  { id: 'PARTIAL', label: 'Partial', icon: '3', index: 2 },
+                  { id: 'COMPLETE', label: 'Complete', icon: '4', index: 3 }
+                ].map((opt) => {
+                  const currentIndex = intent === 'UNRESOLVED' ? 0 : intent === 'BLOCKED' ? 1 : intent === 'PARTIAL' ? 2 : 3;
+                  const isActive = opt.index <= currentIndex;
+                  const isCurrent = opt.id === intent;
+                  
+                  return (
+                    <div key={opt.id} className="relative flex flex-col items-center group">
+                      <button
+                        onClick={() => {
+                          setIntent(opt.id);
+                          if (socketRef.current) {
+                            const sName = localStorage.getItem('auth_name') || 'John Doe';
+                            const sRoll = localStorage.getItem('auth_roll') || 'CS-2026-442';
+                            socketRef.current.emit('student_intent_update', { name: sName, roll: sRoll, intent: opt.id });
+                          }
+                        }}
+                        className={`w-8 h-8 rounded-full flex items-center justify-center z-10 transition-all duration-300 font-bold text-xs ${
+                          isActive 
+                            ? 'bg-primary-500 text-white shadow-[0_0_10px_rgba(var(--color-primary-500),0.5)] scale-110 ring-4 ring-white dark:ring-slate-900' 
+                            : 'bg-slate-200 dark:bg-slate-700 text-slate-500 hover:bg-slate-300 dark:hover:bg-slate-600 ring-4 ring-white dark:ring-slate-900'
+                        }`}
+                      >
+                        {isCurrent ? <CheckCircle2 className="w-4 h-4" /> : opt.icon}
+                      </button>
+                      <span className={`absolute -bottom-6 text-[10px] font-medium transition-colors duration-300 ${isActive ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400'}`}>
+                        {opt.label}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
