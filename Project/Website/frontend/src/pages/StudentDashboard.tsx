@@ -63,7 +63,7 @@ export default function StudentDashboard() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const socketRef = useRef<any>(null);
 
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `${window.location.protocol}//${window.location.hostname}:5000`);
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `https://shine-directive-temp-break.trycloudflare.com`);
 
   useEffect(() => {
     const socket = io(BACKEND_URL);
@@ -189,7 +189,7 @@ export default function StudentDashboard() {
     // Notify invigilator via backend API
     const email = localStorage.getItem('auth_email') || '';
     const name = email ? email.split('@')[0] : 'Unknown Student';
-    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `${window.location.protocol}//${window.location.hostname}:5000`);
+    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `https://shine-directive-temp-break.trycloudflare.com`);
     
     fetch(`${BACKEND_URL}/api/cheat`, {
       method: 'POST',
@@ -223,7 +223,7 @@ export default function StudentDashboard() {
       // Notify invigilator via backend API
       const email = localStorage.getItem('auth_email') || '';
       const name = email ? email.split('@')[0] : 'Unknown Student';
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `${window.location.protocol}//${window.location.hostname}:5000`);
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `https://shine-directive-temp-break.trycloudflare.com`);
       
       fetch(`${BACKEND_URL}/api/cheat`, {
         method: 'POST',
