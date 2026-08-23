@@ -12,6 +12,23 @@ The platform serves three roles — **Students**, **Invigilators**, and **Admins
 
 ---
 
+## Demo Credentials & Presentation
+
+### 🔑 Demo Credentials
+You can log in to the different roles on the login page using the following credentials, or use the quick-login preset buttons on the UI:
+
+| Role | Email | Password |
+| :--- | :--- | :--- |
+| **Student** | `student@demo.com` | `Password@123` |
+| **Invigilator** | `invigilator@demo.com` | `Password@123` |
+| **Admin** | `admin@demo.com` | `Password@123` |
+
+### 📄 Presentation (PPT)
+The project overview presentation can be found at the root of the repository:
+- **Presentation Slides:** [`SAMADHAN.pptx`](SAMADHAN.pptx)
+
+---
+
 ## Architecture
 
 ```
