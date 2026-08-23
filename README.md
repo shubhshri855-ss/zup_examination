@@ -2,6 +2,8 @@
 
 > A next-generation, AI-powered online examination ecosystem built for fairness, security, and real-time oversight. Built for a Hackathon.
 
+**🌐 Live Application URL:** [https://zup-examination.vercel.app](https://zup-examination.vercel.app)
+
 ---
 
 ## Overview
