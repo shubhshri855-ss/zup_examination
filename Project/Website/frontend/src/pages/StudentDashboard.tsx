@@ -624,62 +624,78 @@ export default function StudentDashboard() {
         <div className="grid lg:grid-cols-4 gap-8">
           {/* Exam Questions Section */}
           <div className="lg:col-span-3 space-y-6">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl p-8 min-h-[60vh] flex flex-col relative overflow-hidden">
-               <div className="absolute top-0 left-0 w-full h-1 bg-slate-100 dark:bg-slate-800">
-                  <div className="h-full bg-primary-600 transition-all duration-300" style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}></div>
+            <div className="bg-gradient-to-br from-slate-700 to-slate-800 shadow-xl rounded-xl p-8 min-h-[60vh] flex flex-col relative overflow-hidden">
+               {/* Progress bar on top */}
+               <div className="absolute top-0 left-0 w-full h-1 bg-slate-900/50">
+                  <div className="h-full bg-primary-500 transition-all duration-300" style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}></div>
                </div>
                
-               <div className="flex justify-between items-center mb-8 mt-4 text-sm font-medium text-slate-500 dark:text-slate-400">
-                  <span>Question {currentQuestion + 1} of {questions.length}</span>
-                  <span className="bg-slate-50 dark:bg-slate-800 px-3 py-1 rounded-md border border-slate-200 dark:border-slate-700">+4 Marks | -1 Negative</span>
+               {/* Header like PPT */}
+               <div className="flex flex-col items-center mb-10 mt-2">
+                  <h2 className="text-white text-2xl font-bold tracking-widest uppercase mb-2">JEE MAIN EXAM PORTAL</h2>
+                  <div className="flex space-x-3">
+                     <div className="w-8 h-0.5 bg-white"></div>
+                     <div className="w-8 h-0.5 bg-white"></div>
+                     <div className="w-8 h-0.5 bg-white"></div>
+                     <div className="w-8 h-0.5 bg-white"></div>
+                     <div className="w-8 h-0.5 bg-white"></div>
+                  </div>
                </div>
                
-               <h3 className="text-2xl font-semibold mb-8 text-slate-900 dark:text-white leading-relaxed">
-                 {questions[currentQuestion].id}. {questions[currentQuestion].text}
-               </h3>
+               {/* Question Box */}
+               <div className="border border-dashed border-white/60 rounded-xl p-8 mb-10 bg-white/5 backdrop-blur-sm shadow-inner mx-4">
+                 <h3 className="text-2xl font-bold text-white text-center leading-relaxed tracking-wide">
+                   Q{questions[currentQuestion].id}. {questions[currentQuestion].text}
+                 </h3>
+               </div>
                
-               <div className={`space-y-4 mb-auto relative ${!materialsVerified ? 'opacity-50 pointer-events-none select-none' : ''}`}>
+               <div className={`space-y-6 mb-auto relative w-full max-w-3xl mx-auto px-4 ${!materialsVerified ? 'opacity-50 pointer-events-none select-none' : ''}`}>
                  {!materialsVerified && (
-                   <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-700">
-                     <Lock size={32} className="text-slate-500 mb-2" />
-                     <p className="font-semibold text-slate-700 dark:text-slate-200">Exam Locked</p>
-                     <p className="text-sm text-slate-500">Please show your pen & copy to the camera to unlock</p>
+                   <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-sm rounded-xl border border-slate-700">
+                     <Lock size={32} className="text-white mb-2" />
+                     <p className="font-semibold text-white">Exam Locked</p>
+                     <p className="text-sm text-slate-300">Please show your pen & copy to the camera to unlock</p>
                    </div>
                  )}
                  {questions[currentQuestion].options.map((option, idx) => {
                    const isSelected = answers[currentQuestion] === option;
+                   const colors = ['bg-[#00a8e8]', 'bg-[#00c853]', 'bg-[#ffb300]', 'bg-[#ff3d00]'];
+                   const borderColors = ['border-[#00a8e8]', 'border-[#00c853]', 'border-[#ffb300]', 'border-[#ff3d00]'];
+                   const letters = ['A', 'B', 'C', 'D'];
+                   
                    return (
                      <label 
                        key={idx} 
-                       className={`flex items-center p-4 rounded-xl border-2 transition-all duration-200 ${
+                       className={`flex items-center group w-full ${
                          !materialsVerified ? 'cursor-not-allowed' : 'cursor-pointer'
-                       } ${
-                         isSelected 
-                           ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10' 
-                           : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                        }`}
                      >
-                       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-4 ${
-                         isSelected ? 'border-primary-500' : 'border-slate-300 dark:border-slate-600'
-                       }`}>
-                         {isSelected && <div className="w-3 h-3 rounded-full bg-primary-500"></div>}
+                       <div className={`w-14 h-14 rounded-full flex items-center justify-center mr-4 shadow-lg shrink-0 ${colors[idx % colors.length]}`}>
+                         <span className="text-white font-bold text-xl">{letters[idx % letters.length]}</span>
                        </div>
-                       <input 
-                         type="radio" 
-                         name={`question-${currentQuestion}`} 
-                         value={option}
-                         checked={isSelected}
-                         disabled={!materialsVerified}
-                         onChange={() => {
-                            if (materialsVerified) {
-                               setAnswers(prev => ({ ...prev, [currentQuestion]: option }))
-                            }
-                         }}
-                         className="hidden"
-                       />
-                       <span className={`text-lg ${isSelected ? 'text-primary-700 dark:text-primary-300 font-medium' : 'text-slate-700 dark:text-slate-300'}`}>
-                         {option}
-                       </span>
+                       
+                       <div className={`flex-grow p-4 rounded-xl transition-all duration-200 border-4 shadow-md ${
+                         isSelected 
+                           ? `${borderColors[idx%colors.length]} bg-white scale-[1.02]` 
+                           : 'border-transparent bg-white hover:bg-slate-100 hover:scale-[1.01]'
+                       }`}>
+                         <input 
+                           type="radio" 
+                           name={`question-${currentQuestion}`} 
+                           value={option}
+                           checked={isSelected}
+                           disabled={!materialsVerified}
+                           onChange={() => {
+                              if (materialsVerified) {
+                                 setAnswers(prev => ({ ...prev, [currentQuestion]: option }))
+                              }
+                           }}
+                           className="hidden"
+                         />
+                         <span className="text-lg text-slate-900 font-bold block text-center tracking-wide">
+                           {option}
+                         </span>
+                       </div>
                      </label>
                    );
                  })}
