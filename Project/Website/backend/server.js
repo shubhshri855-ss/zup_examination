@@ -23,6 +23,46 @@ let students = [];
 let activeCenterId = 1;
 let nextId = 1;
 
+// Intent Status Calculation Helper
+function calculateCompletionSignal(testSession) {
+  const isLocked = !!testSession.isLocked;
+  const prerequisitesMissing = !!testSession.prerequisitesMissing;
+  const isDraft = !!testSession.isDraft;
+  const pendingManualReview = !!testSession.pendingManualReview;
+  const attemptedQuestions = testSession.attemptedQuestions || 0;
+  const totalQuestions = testSession.totalQuestions || 5;
+
+  if (isLocked || prerequisitesMissing) {
+    return {
+      status: 'Blocked',
+      reason: isLocked ? 'Session is locked by AI Proctoring or security settings.' : 'Prerequisites missing (Face registration required).',
+      updatedAt: new Date().toISOString(),
+      metadata: { attemptedQuestions, totalQuestions, isLocked, isDraft }
+    };
+  } else if (isDraft || pendingManualReview) {
+    return {
+      status: 'Unresolved',
+      reason: isDraft ? 'Attempt is currently saved as draft.' : 'Attempt is pending manual review.',
+      updatedAt: new Date().toISOString(),
+      metadata: { attemptedQuestions, totalQuestions, isLocked, isDraft }
+    };
+  } else if (attemptedQuestions < totalQuestions) {
+    return {
+      status: 'Partial',
+      reason: `Attempted ${attemptedQuestions}/${totalQuestions} questions.`,
+      updatedAt: new Date().toISOString(),
+      metadata: { attemptedQuestions, totalQuestions, isLocked, isDraft }
+    };
+  } else {
+    return {
+      status: 'Complete',
+      reason: 'All questions attempted and submitted.',
+      updatedAt: new Date().toISOString(),
+      metadata: { attemptedQuestions, totalQuestions, isLocked, isDraft }
+    };
+  }
+}
+
 // In-memory active exam paper store & broadcast delivery receipts
 let activeExamPaper = null;
 let broadcastReceipts = new Map();
@@ -146,6 +186,7 @@ app.post('/api/students', (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
+  const totalQuestions = activeExamPaper && activeExamPaper.questions ? activeExamPaper.questions.length : 5;
   const newStudent = {
     id: nextId++,
     name,
@@ -153,7 +194,16 @@ app.post('/api/students', (req, res) => {
     seat,
     centerId: activeCenterId,
     status: 'pending',
-    match: Math.floor(Math.random() * 20) + 80 // Random match between 80-100 for mock purposes
+    match: Math.floor(Math.random() * 20) + 80, // Random match between 80-100 for mock purposes
+    intent: 'UNRESOLVED',
+    intentStatus: calculateCompletionSignal({
+      attemptedQuestions: 0,
+      totalQuestions,
+      isLocked: true,
+      isDraft: false,
+      prerequisitesMissing: true,
+      pendingManualReview: false
+    })
   };
 
   students.push(newStudent);
@@ -175,6 +225,22 @@ app.put('/api/students/:id/status', (req, res) => {
 
   student.status = status;
   
+  const totalQuestions = activeExamPaper && activeExamPaper.questions ? activeExamPaper.questions.length : 5;
+  const attemptedQuestions = student.answers ? 
+    (Array.isArray(student.answers) ? student.answers.filter(Boolean).length : Object.keys(student.answers).length) : 0;
+
+  student.intentStatus = calculateCompletionSignal({
+    attemptedQuestions,
+    totalQuestions,
+    isLocked: student.status === 'pending' || !student.referenceDescriptor,
+    isDraft: student.status !== 'submitted',
+    prerequisitesMissing: !student.referenceDescriptor,
+    pendingManualReview: student.status === 'flagged'
+  });
+  
+  // Keep intent property in sync
+  student.intent = student.intentStatus.status.toUpperCase();
+
   // Emit update
   io.emit('student_updated', student);
   
@@ -189,9 +255,66 @@ app.put('/api/students/:id', (req, res) => {
   }
 
   students[studentIndex] = { ...students[studentIndex], ...req.body };
+  const student = students[studentIndex];
+
+  const totalQuestions = req.body.totalQuestions !== undefined ? req.body.totalQuestions : (
+    activeExamPaper && activeExamPaper.questions ? activeExamPaper.questions.length : 5
+  );
+  const attemptedQuestions = req.body.attemptedQuestions !== undefined ? req.body.attemptedQuestions : (
+    student.answers ? (Array.isArray(student.answers) ? student.answers.filter(Boolean).length : Object.keys(student.answers).length) : 0
+  );
   
-  io.emit('student_updated', students[studentIndex]);
-  res.json(students[studentIndex]);
+  const isLocked = req.body.isLocked !== undefined ? req.body.isLocked : (student.status === 'pending' || !student.referenceDescriptor);
+  const isDraft = req.body.isDraft !== undefined ? req.body.isDraft : (student.status !== 'submitted');
+
+  student.intentStatus = calculateCompletionSignal({
+    attemptedQuestions,
+    totalQuestions,
+    isLocked,
+    isDraft,
+    prerequisitesMissing: !student.referenceDescriptor,
+    pendingManualReview: student.status === 'flagged'
+  });
+
+  student.intent = student.intentStatus.status.toUpperCase();
+  
+  io.emit('student_updated', student);
+  res.json(student);
+});
+
+app.put('/api/students/roll/:roll', (req, res) => {
+  const roll = req.params.roll;
+  const studentIndex = students.findIndex(s => s.roll.toLowerCase() === roll.toLowerCase());
+  if (studentIndex === -1) {
+    return res.status(404).json({ error: 'Student not found' });
+  }
+
+  students[studentIndex] = { ...students[studentIndex], ...req.body };
+  const student = students[studentIndex];
+
+  const totalQuestions = req.body.totalQuestions !== undefined ? req.body.totalQuestions : (
+    activeExamPaper && activeExamPaper.questions ? activeExamPaper.questions.length : 5
+  );
+  const attemptedQuestions = req.body.attemptedQuestions !== undefined ? req.body.attemptedQuestions : (
+    student.answers ? (Array.isArray(student.answers) ? student.answers.filter(Boolean).length : Object.keys(student.answers).length) : 0
+  );
+  
+  const isLocked = req.body.isLocked !== undefined ? req.body.isLocked : (student.status === 'pending' || !student.referenceDescriptor);
+  const isDraft = req.body.isDraft !== undefined ? req.body.isDraft : (student.status !== 'submitted');
+
+  student.intentStatus = calculateCompletionSignal({
+    attemptedQuestions,
+    totalQuestions,
+    isLocked,
+    isDraft,
+    prerequisitesMissing: !student.referenceDescriptor,
+    pendingManualReview: student.status === 'flagged'
+  });
+
+  student.intent = student.intentStatus.status.toUpperCase();
+
+  io.emit('student_updated', student);
+  res.json(student);
 });
 
 app.delete('/api/students/:id', (req, res) => {
@@ -290,7 +413,7 @@ app.post('/api/submit-exam', (req, res) => {
     return res.status(400).json({ error: 'Roll number is required' });
   }
 
-  const student = students.find(s => s.roll === roll);
+  const student = students.find(s => s.roll.toLowerCase() === roll.toLowerCase());
   if (!student) {
     return res.status(404).json({ error: 'Student not found' });
   }
@@ -311,6 +434,19 @@ app.post('/api/submit-exam', (req, res) => {
   student.maxScore = maxScore;
   student.answers = answers;
   student.intent = 'COMPLETE';
+
+  // Calculate and attach intentStatus
+  const totalQuestions = maxScore || (activeExamPaper && activeExamPaper.questions ? activeExamPaper.questions.length : 5);
+  const attemptedQuestions = answers ? answers.filter(Boolean).length : totalQuestions;
+
+  student.intentStatus = calculateCompletionSignal({
+    attemptedQuestions,
+    totalQuestions,
+    isLocked: false,
+    isDraft: false,
+    prerequisitesMissing: false,
+    pendingManualReview: false
+  });
 
   console.log(`[EXAM SUBMITTED] ${student.name} (${roll}) Score: ${score}/${maxScore}`);
   io.emit('student_updated', student);
@@ -352,6 +488,32 @@ io.on('connection', (socket) => {
   socket.on('student_intent_update', (data) => {
     if (!data || !data.roll) return;
     console.log(`[INTENT] ${data.name} (${data.roll}) updated status to: ${data.intent}`);
+    
+    // Update student intent in the local in-memory DB and compute intentStatus
+    const student = students.find(s => s.roll.toLowerCase() === data.roll.toLowerCase());
+    if (student) {
+      student.intent = data.intent;
+      
+      const totalQuestions = activeExamPaper && activeExamPaper.questions ? activeExamPaper.questions.length : 5;
+      const attemptedQuestions = student.answers ? 
+        (Array.isArray(student.answers) ? student.answers.filter(Boolean).length : Object.keys(student.answers).length) : 0;
+      
+      const manualBlocked = data.intent === 'BLOCKED';
+      const manualDraft = data.intent === 'UNRESOLVED' || data.intent === 'PARTIAL';
+      const manualComplete = data.intent === 'COMPLETE';
+
+      student.intentStatus = calculateCompletionSignal({
+        attemptedQuestions,
+        totalQuestions,
+        isLocked: manualBlocked || student.status === 'pending' || !student.referenceDescriptor,
+        isDraft: manualDraft || (student.status !== 'submitted' && !manualComplete),
+        prerequisitesMissing: !student.referenceDescriptor,
+        pendingManualReview: student.status === 'flagged'
+      });
+      
+      io.emit('student_updated', student);
+    }
+    
     io.emit('student_intent_updated', data);
   });
 

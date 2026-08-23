@@ -8,6 +8,7 @@ import { FaceLandmarker, ObjectDetector, FilesetResolver } from "@mediapipe/task
 import { io } from 'socket.io-client';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import IntentStatusBadge from '../components/IntentStatusBadge';
 
 declare global {
   interface Window {
@@ -73,8 +74,38 @@ export default function StudentDashboard() {
   const [omrAnswers, setOmrAnswers] = useState<string[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const socketRef = useRef<any>(null);
+  const [studentRecord, setStudentRecord] = useState<any>(null);
 
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : `https://zup-exam-backend-42.loca.lt`);
+
+  const fetchStudentRecord = useCallback(async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/students`);
+      const data = await res.json();
+      const sRoll = localStorage.getItem('auth_roll');
+      const sEmail = localStorage.getItem('auth_email') || '';
+      const sEmailName = sEmail.split('@')[0];
+      
+      const found = data.find((s: any) => 
+        (sRoll && s.roll.toLowerCase() === sRoll.toLowerCase()) ||
+        s.name.toLowerCase() === studentName.toLowerCase() ||
+        s.name.toLowerCase() === sEmailName.toLowerCase()
+      );
+      if (found) {
+        setStudentRecord(found);
+        setIntent(found.intentStatus?.status?.toUpperCase() || found.intent || 'UNRESOLVED');
+        localStorage.setItem('auth_roll', found.roll);
+      }
+    } catch (err) {
+      console.error('Failed to fetch student record:', err);
+    }
+  }, [BACKEND_URL, studentName]);
+
+  useEffect(() => {
+    fetchStudentRecord();
+  }, [fetchStudentRecord]);
+
+
 
   useEffect(() => {
     const socket = io(BACKEND_URL);
@@ -107,10 +138,24 @@ export default function StudentDashboard() {
       setExamTimeLeft(null);
     });
 
+    socket.on('student_updated', (updatedStudent: any) => {
+      const sRoll = localStorage.getItem('auth_roll');
+      const sEmail = localStorage.getItem('auth_email') || '';
+      const sEmailName = sEmail.split('@')[0];
+      if (
+        (sRoll && updatedStudent.roll.toLowerCase() === sRoll.toLowerCase()) ||
+        updatedStudent.name.toLowerCase() === studentName.toLowerCase() ||
+        updatedStudent.name.toLowerCase() === sEmailName.toLowerCase()
+      ) {
+        setStudentRecord(updatedStudent);
+        setIntent(updatedStudent.intentStatus?.status?.toUpperCase() || updatedStudent.intent || 'UNRESOLVED');
+      }
+    });
+
     return () => {
       socket.disconnect();
     };
-  }, [BACKEND_URL]);
+  }, [BACKEND_URL, studentName]);
 
   useEffect(() => {
     if (!activeExamPaper?.startTime) {
@@ -198,6 +243,33 @@ export default function StudentDashboard() {
       return newSet;
     });
   }, [currentQuestion]);
+
+  const saveDraft = useCallback(async (updatedAnswers = answers, updatedOmr = omrAnswers) => {
+    const sRoll = localStorage.getItem('auth_roll') || 'CS-2026-442';
+    const totalQ = activeExamPaper?.questions?.length || questions.length;
+    
+    let attempted = 0;
+    for (let i = 0; i < totalQ; i++) {
+      if (updatedAnswers[i] || (updatedOmr && updatedOmr[i])) {
+        attempted++;
+      }
+    }
+
+    try {
+      await fetch(`${BACKEND_URL}/api/students/roll/${sRoll}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answers: updatedOmr && updatedOmr.length > 0 ? updatedOmr : Object.values(updatedAnswers),
+          attemptedQuestions: attempted,
+          totalQuestions: totalQ,
+          isDraft: true
+        })
+      });
+    } catch (err) {
+      console.error('Failed to save draft:', err);
+    }
+  }, [BACKEND_URL, answers, omrAnswers, activeExamPaper, questions.length]);
 
   const terminateExam = useCallback((reason: string = "You violated the strict full-screen policy.") => {
     if (mediaStream) {
@@ -673,11 +745,13 @@ export default function StudentDashboard() {
                            value={option}
                            checked={isSelected}
                            disabled={!materialsVerified}
-                           onChange={() => {
-                              if (materialsVerified) {
-                                 setAnswers(prev => ({ ...prev, [currentQuestion]: option }))
-                              }
-                           }}
+                            onChange={() => {
+                               if (materialsVerified) {
+                                  const newAnswers = { ...answers, [currentQuestion]: option };
+                                  setAnswers(newAnswers);
+                                  saveDraft(newAnswers, omrAnswers);
+                               }
+                            }}
                            className="hidden"
                          />
                          <span className="text-lg text-slate-900 font-bold block text-center tracking-wide">
@@ -690,35 +764,41 @@ export default function StudentDashboard() {
                </div>
 
                <div className="flex justify-between items-center mt-12 pt-6 border-t border-slate-200 dark:border-slate-700">
-                 <button 
-                   onClick={() => setCurrentQuestion(prev => Math.max(0, prev - 1))}
-                   disabled={currentQuestion === 0}
-                   className="px-6 py-3 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-                 >
-                   Previous
-                 </button>
-                 <button 
-                   onClick={() => {
-                     setReviewed(prev => {
-                       const newSet = new Set(prev);
-                       if (newSet.has(currentQuestion)) newSet.delete(currentQuestion);
-                       else newSet.add(currentQuestion);
-                       return newSet;
-                     });
-                   }}
-                   className={`flex items-center px-6 py-3 rounded-lg font-medium transition-colors ${reviewed.has(currentQuestion) ? 'bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-300 dark:bg-fuchsia-900/30 dark:border-fuchsia-800 dark:text-fuchsia-400' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700'}`}
-                 >
-                   <Bookmark className="w-4 h-4 mr-2" />
-                   {reviewed.has(currentQuestion) ? 'Marked for Review' : 'Mark for Review'}
-                 </button>
-                 <button 
-                   onClick={() => setCurrentQuestion(prev => Math.min(questions.length - 1, prev + 1))}
-                   disabled={currentQuestion === questions.length - 1}
-                   className="btn-primary px-8 py-3"
-                 >
-                   Next Question
-                 </button>
-               </div>
+                  <button 
+                    onClick={() => {
+                      setCurrentQuestion(prev => Math.max(0, prev - 1));
+                      saveDraft(answers, omrAnswers);
+                    }}
+                    disabled={currentQuestion === 0}
+                    className="px-6 py-3 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                  >
+                    Previous
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setReviewed(prev => {
+                        const newSet = new Set(prev);
+                        if (newSet.has(currentQuestion)) newSet.delete(currentQuestion);
+                        else newSet.add(currentQuestion);
+                        return newSet;
+                      });
+                    }}
+                    className={`flex items-center px-6 py-3 rounded-lg font-medium transition-colors ${reviewed.has(currentQuestion) ? 'bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-300 dark:bg-fuchsia-900/30 dark:border-fuchsia-800 dark:text-fuchsia-400' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700'}`}
+                  >
+                    <Bookmark className="w-4 h-4 mr-2" />
+                    {reviewed.has(currentQuestion) ? 'Marked for Review' : 'Mark for Review'}
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setCurrentQuestion(prev => Math.min(questions.length - 1, prev + 1));
+                      saveDraft(answers, omrAnswers);
+                    }}
+                    disabled={currentQuestion === questions.length - 1}
+                    className="btn-primary px-8 py-3"
+                  >
+                    Next Question
+                  </button>
+                </div>
             </div>
           </div>
 
@@ -796,7 +876,10 @@ export default function StudentDashboard() {
                   return (
                     <button
                       key={idx}
-                      onClick={() => setCurrentQuestion(idx)}
+                      onClick={() => {
+                        setCurrentQuestion(idx);
+                        saveDraft(answers, omrAnswers);
+                      }}
                       className={`relative w-full aspect-square rounded-md flex items-center justify-center text-sm font-medium transition-colors ${statusClass}`}
                     >
                       {idx + 1}
@@ -822,7 +905,12 @@ export default function StudentDashboard() {
 
             {/* Intent Capture / Completion Signal */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl p-5">
-              <h3 className="text-sm font-semibold mb-4 text-slate-900 dark:text-white">Completion Signal</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Completion Signal</h3>
+                {studentRecord && (
+                  <IntentStatusBadge intentStatus={studentRecord.intentStatus} fallbackStatus={studentRecord.intent} />
+                )}
+              </div>
               <p className="text-xs text-slate-500 mb-6">Signal your current progress level to the invigilator.</p>
               
               <div className="relative flex justify-between items-center w-full px-2 mb-2">
@@ -882,6 +970,42 @@ export default function StudentDashboard() {
         <div className="grid lg:grid-cols-3 gap-8">
         {/* Main Content Area */}
         <div className="lg:col-span-2 space-y-8">
+          
+          {/* Active Exam Attempt & Completion Signal Badge */}
+          {studentRecord && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl p-6"
+            >
+              <div className="flex justify-between items-start flex-wrap gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">Active Assessment Session</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Advanced Algorithms (Code: CS-2026)</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Session Status:</span>
+                  <IntentStatusBadge intentStatus={studentRecord.intentStatus} fallbackStatus={studentRecord.intent} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 text-sm text-slate-600 dark:text-slate-400">
+                <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-lg border border-slate-200/50 dark:border-slate-800/40">
+                  <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Registration</div>
+                  <div className="font-bold text-slate-900 dark:text-white">{studentRecord.roll}</div>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-lg border border-slate-200/50 dark:border-slate-800/40">
+                  <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Seat Assignment</div>
+                  <div className="font-bold text-slate-900 dark:text-white">{studentRecord.seat}</div>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-lg border border-slate-200/50 dark:border-slate-800/40">
+                  <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Attempt Details</div>
+                  <div className="font-bold text-slate-900 dark:text-white">
+                    {studentRecord.intentStatus?.metadata?.attemptedQuestions || 0} / {studentRecord.intentStatus?.metadata?.totalQuestions || 5} Answered
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
           
           {/* Upload Section */}
           <motion.div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl p-6">
@@ -1106,6 +1230,7 @@ export default function StudentDashboard() {
                               const newAns = [...omrAnswers];
                               newAns[idx] = opt;
                               setOmrAnswers(newAns);
+                              saveDraft(answers, newAns);
                             }}
                             className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
                               omrAnswers[idx] === opt 

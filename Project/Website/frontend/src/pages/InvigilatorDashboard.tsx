@@ -4,6 +4,7 @@ import { Users, CheckCircle, AlertCircle, Search, UserCheck, Plus, Trash2, Clock
 import { io } from 'socket.io-client';
 import CameraCaptureModal from '../components/CameraCaptureModal';
 import ExamPaperBroadcaster from '../components/ExamPaperBroadcaster';
+import IntentStatusBadge from '../components/IntentStatusBadge';
 
 interface Student {
   id: number;
@@ -14,6 +15,7 @@ interface Student {
   match: number | null;
   centerId?: number;
   intent?: string;
+  intentStatus?: any;
   score?: number;
   maxScore?: number;
   referenceDescriptor?: number[];
@@ -56,13 +58,51 @@ const generateMockStudentsForCenter = (centerId: number) => {
   for (let i = 1; i <= center.present; i++) {
     const isVerified = i <= center.verified;
     const name = nameList[(i - 1) % nameList.length];
+    
+    const intentStatus = (() => {
+      if (!isVerified) {
+        return {
+          status: 'Blocked' as const,
+          reason: 'Prerequisites missing (Face registration required).',
+          updatedAt: new Date().toISOString(),
+          metadata: { attemptedQuestions: 0, totalQuestions: 5, isLocked: true, isDraft: false }
+        };
+      }
+      const rand = Math.random();
+      if (rand < 0.6) {
+        return {
+          status: 'Complete' as const,
+          reason: 'All questions attempted and submitted.',
+          updatedAt: new Date().toISOString(),
+          metadata: { attemptedQuestions: 5, totalQuestions: 5, isLocked: false, isDraft: false }
+        };
+      } else if (rand < 0.9) {
+        const attempted = Math.floor(Math.random() * 4) + 1;
+        return {
+          status: 'Partial' as const,
+          reason: `Attempted ${attempted}/5 questions.`,
+          updatedAt: new Date().toISOString(),
+          metadata: { attemptedQuestions: attempted, totalQuestions: 5, isLocked: false, isDraft: true }
+        };
+      } else {
+        return {
+          status: 'Unresolved' as const,
+          reason: 'Attempt is currently saved as draft.',
+          updatedAt: new Date().toISOString(),
+          metadata: { attemptedQuestions: 0, totalQuestions: 5, isLocked: false, isDraft: true }
+        };
+      }
+    })();
+
     list.push({
       id: centerId * 1000 + i,
       name,
       roll: `CS-2026-${code}-${String(i).padStart(3, '0')}`,
       seat: `${String.fromCharCode(65 + (i % 6))}-${10 + (i % 20)}`,
       status: isVerified ? 'verified' : 'pending',
-      match: isVerified ? Math.floor(Math.random() * 15) + 85 : null
+      match: isVerified ? Math.floor(Math.random() * 15) + 85 : null,
+      intent: intentStatus.status.toUpperCase(),
+      intentStatus
     });
   }
   return list;
@@ -401,14 +441,7 @@ export default function InvigilatorDashboard() {
                       )}
                     </td>
                     <td className="p-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold ${
-                        student.intent === 'COMPLETE' ? 'bg-emerald-100 text-emerald-700' :
-                        student.intent === 'PARTIAL' ? 'bg-amber-100 text-amber-700' :
-                        student.intent === 'BLOCKED' ? 'bg-red-100 text-red-700' :
-                        'bg-slate-100 text-slate-700'
-                      }`}>
-                        {student.intent || 'UNRESOLVED'}
-                      </span>
+                      <IntentStatusBadge intentStatus={student.intentStatus} fallbackStatus={student.intent} />
                     </td>
                     <td className="p-4">
                       <div className="flex items-center space-x-2">

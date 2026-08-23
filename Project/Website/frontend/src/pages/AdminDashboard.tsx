@@ -13,6 +13,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { io } from 'socket.io-client';
+import IntentStatusBadge from '../components/IntentStatusBadge';
 
 interface Student {
   id: number;
@@ -22,6 +23,8 @@ interface Student {
   seat: string;
   match: number | null;
   centerId?: number;
+  intent?: string;
+  intentStatus?: any;
 }
 
 interface CheatingAlert {
@@ -68,13 +71,51 @@ const generateMockStudentsForCenter = (centerId: number) => {
   for (let i = 1; i <= center.present; i++) {
     const isVerified = i <= center.verified;
     const name = nameList[(i - 1) % nameList.length];
+    
+    const intentStatus = (() => {
+      if (!isVerified) {
+        return {
+          status: 'Blocked' as const,
+          reason: 'Prerequisites missing (Face registration required).',
+          updatedAt: new Date().toISOString(),
+          metadata: { attemptedQuestions: 0, totalQuestions: 5, isLocked: true, isDraft: false }
+        };
+      }
+      const rand = Math.random();
+      if (rand < 0.6) {
+        return {
+          status: 'Complete' as const,
+          reason: 'All questions attempted and submitted.',
+          updatedAt: new Date().toISOString(),
+          metadata: { attemptedQuestions: 5, totalQuestions: 5, isLocked: false, isDraft: false }
+        };
+      } else if (rand < 0.9) {
+        const attempted = Math.floor(Math.random() * 4) + 1;
+        return {
+          status: 'Partial' as const,
+          reason: `Attempted ${attempted}/5 questions.`,
+          updatedAt: new Date().toISOString(),
+          metadata: { attemptedQuestions: attempted, totalQuestions: 5, isLocked: false, isDraft: true }
+        };
+      } else {
+        return {
+          status: 'Unresolved' as const,
+          reason: 'Attempt is currently saved as draft.',
+          updatedAt: new Date().toISOString(),
+          metadata: { attemptedQuestions: 0, totalQuestions: 5, isLocked: false, isDraft: true }
+        };
+      }
+    })();
+
     list.push({
       id: centerId * 1000 + i,
       name,
       roll: `CS-2026-${code}-${String(i).padStart(3, '0')}`,
       seat: `${String.fromCharCode(65 + (i % 6))}-${10 + (i % 20)}`,
       status: isVerified ? 'verified' : 'pending',
-      match: isVerified ? Math.floor(Math.random() * 15) + 85 : null
+      match: isVerified ? Math.floor(Math.random() * 15) + 85 : null,
+      intent: intentStatus.status.toUpperCase(),
+      intentStatus
     });
   }
   return list;
@@ -527,6 +568,7 @@ export default function AdminDashboard() {
                       <th className="p-3 pl-6">Roll No</th>
                       <th className="p-3">Name</th>
                       <th className="p-3">Seat</th>
+                      <th className="p-3 text-center">Intent Status</th>
                       <th className="p-3 text-center">Status</th>
                     </tr>
                   </thead>
@@ -536,6 +578,9 @@ export default function AdminDashboard() {
                         <td className="p-3 pl-6 font-semibold text-slate-900 dark:text-white">{student.roll}</td>
                         <td className="p-3 text-slate-700 dark:text-slate-350">{student.name}</td>
                         <td className="p-3 text-slate-600 dark:text-slate-400 font-mono">{student.seat}</td>
+                        <td className="p-3 text-center">
+                          <IntentStatusBadge intentStatus={student.intentStatus} fallbackStatus={student.intent} />
+                        </td>
                         <td className="p-3 text-center">
                           <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
                             student.status === 'verified' 
@@ -551,7 +596,7 @@ export default function AdminDashboard() {
                     ))}
                     {filteredLiveStudents.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="p-8 text-center text-slate-500 bg-slate-50/50 dark:bg-slate-900/10">
+                        <td colSpan={5} className="p-8 text-center text-slate-500 bg-slate-50/50 dark:bg-slate-900/10">
                           No live candidate records matching query.
                         </td>
                       </tr>

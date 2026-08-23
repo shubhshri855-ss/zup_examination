@@ -140,7 +140,7 @@ export default function ProctoringSetup({ onComplete, onClose }: { onComplete: (
       // Fetch student reference face
       const response = await fetch(`${BACKEND_URL}/api/students`);
       const students = await response.json();
-      const student = students.find((s: { name: string; referenceDescriptor?: number[] }) => s.name.toLowerCase() === name.toLowerCase());
+      const student = students.find((s: any) => s.name.toLowerCase() === name.toLowerCase());
 
       if (!student || !student.referenceDescriptor) {
         setFaceStatus('No reference face found. Please contact Invigilator to capture your face first!');
@@ -167,6 +167,18 @@ export default function ProctoringSetup({ onComplete, onClose }: { onComplete: (
       // 0.65 is a relaxed threshold (industry standard is 0.60, 0.65 is more lenient for varying lighting/angles)
       if (distance < 0.65) {
         setFaceStatus('Identity Verified Successfully!');
+        
+        // Update student status to verified on backend
+        try {
+          await fetch(`${BACKEND_URL}/api/students/${student.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'verified' })
+          });
+        } catch (e) {
+          console.error('Failed to update student verified status on backend:', e);
+        }
+
         setTimeout(() => {
           onComplete(stream);
         }, 1500);
