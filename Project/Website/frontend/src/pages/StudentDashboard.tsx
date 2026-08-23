@@ -630,18 +630,6 @@ export default function StudentDashboard() {
                   <div className="h-full bg-primary-500 transition-all duration-300" style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}></div>
                </div>
                
-               {/* Header like PPT */}
-               <div className="flex flex-col items-center mb-10 mt-2">
-                  <h2 className="text-white text-2xl font-bold tracking-widest uppercase mb-2">JEE MAIN EXAM PORTAL</h2>
-                  <div className="flex space-x-3">
-                     <div className="w-8 h-0.5 bg-white"></div>
-                     <div className="w-8 h-0.5 bg-white"></div>
-                     <div className="w-8 h-0.5 bg-white"></div>
-                     <div className="w-8 h-0.5 bg-white"></div>
-                     <div className="w-8 h-0.5 bg-white"></div>
-                  </div>
-               </div>
-               
                {/* Question Box */}
                <div className="border border-dashed border-white/60 rounded-xl p-8 mb-10 bg-white/5 backdrop-blur-sm shadow-inner mx-4">
                  <h3 className="text-2xl font-bold text-white text-center leading-relaxed tracking-wide">
